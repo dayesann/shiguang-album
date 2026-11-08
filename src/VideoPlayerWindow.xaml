@@ -1,0 +1,64 @@
+<Window x:Class="Shiguang.VideoPlayerWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:l="clr-namespace:Shiguang"
+ Title="视频 · 时光相册" Width="1180" Height="780" MinWidth="700" MinHeight="480" Background="{DynamicResource ViewerBackground}" Foreground="{DynamicResource ViewerBright}" FontFamily="Microsoft YaHei UI, Segoe UI" FontSize="15" WindowStartupLocation="CenterScreen"
+ PreviewKeyDown="Player_KeyDown" PreviewMouseMove="Player_MouseMove" PreviewMouseDown="Player_MouseDown" Closing="Player_Closing">
+ <Window.Resources>
+  <Style x:Key="PlayerButton" TargetType="Button"><Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+   <Setter Property="Width" Value="44"/><Setter Property="Height" Value="44"/><Setter Property="MinHeight" Value="0"/><Setter Property="Padding" Value="0"/><Setter Property="Margin" Value="2,0"/><Setter Property="Background" Value="Transparent"/><Setter Property="Foreground" Value="{DynamicResource ViewerBright}"/><Setter Property="Cursor" Value="Hand"/><Setter Property="BorderThickness" Value="0"/>
+   <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button"><Border x:Name="Frame" Background="{TemplateBinding Background}" CornerRadius="26" BorderBrush="Transparent" BorderThickness="2"><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Frame" Property="Background" Value="{DynamicResource ViewerTrack}"/></Trigger><Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Frame" Property="BorderBrush" Value="{DynamicResource ViewerLink}"/></Trigger><Trigger Property="IsEnabled" Value="False"><Setter TargetName="Frame" Property="Opacity" Value="0.28"/></Trigger><Trigger Property="IsPressed" Value="True"><Setter TargetName="Frame" Property="Background" Value="{DynamicResource ViewerLine}"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter>
+  </Style>
+  <Style x:Key="PlayerSlider" TargetType="Slider">
+   <Setter Property="Height" Value="30"/><Setter Property="Minimum" Value="0"/><Setter Property="Maximum" Value="1"/><Setter Property="Focusable" Value="True"/><Setter Property="Background" Value="Transparent"/>
+   <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Slider"><Grid Background="{TemplateBinding Background}" Margin="7,0"><Track x:Name="PART_Track" VerticalAlignment="Center" Height="18"><Track.DecreaseRepeatButton><RepeatButton Focusable="False" IsHitTestVisible="False"><RepeatButton.Template><ControlTemplate TargetType="RepeatButton"><Border Height="4" CornerRadius="2" Background="{DynamicResource ViewerFocus}"/></ControlTemplate></RepeatButton.Template></RepeatButton></Track.DecreaseRepeatButton><Track.Thumb><Thumb Width="14" Height="18"><Thumb.Template><ControlTemplate TargetType="Thumb"><Grid Background="Transparent"><Ellipse Width="12" Height="12" Fill="{DynamicResource ViewerOnAccent}"/></Grid></ControlTemplate></Thumb.Template></Thumb></Track.Thumb><Track.IncreaseRepeatButton><RepeatButton Focusable="False" IsHitTestVisible="False"><RepeatButton.Template><ControlTemplate TargetType="RepeatButton"><Border Height="4" CornerRadius="2" Background="{DynamicResource ViewerDisabled}"/></ControlTemplate></RepeatButton.Template></RepeatButton></Track.IncreaseRepeatButton></Track></Grid><ControlTemplate.Triggers><Trigger Property="IsKeyboardFocused" Value="True"><Setter Property="Background" Value="{DynamicResource ViewerHover}"/></Trigger><Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.35"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter>
+  </Style>
+  <Style TargetType="ToolTip"><Setter Property="Background" Value="{DynamicResource ViewerSurface}"/><Setter Property="Foreground" Value="{DynamicResource ViewerText}"/><Setter Property="FontSize" Value="14"/><Setter Property="Padding" Value="10,7"/></Style>
+ </Window.Resources>
+ <Grid x:Name="PlayerRoot" Background="{DynamicResource ViewerBackground}" ClipToBounds="True" Focusable="True">
+  <Grid x:Name="VideoSurface" Background="Transparent" MouseLeftButtonDown="VideoSurface_Click"/>
+  <Border x:Name="HeaderBar" VerticalAlignment="Top" Background="{DynamicResource ViewerTop}" Padding="18,10">
+   <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="52"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+    <Button Style="{StaticResource PlayerButton}" Click="Back_Click" ToolTip="返回媒体库（Esc）" AutomationProperties.Name="返回媒体库"><l:FluentIcon Kind="arrow_left" Foreground="{DynamicResource ViewerText}"/></Button>
+    <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="10,0,12,0"><TextBlock x:Name="FileTitle" FontSize="16" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/><TextBlock x:Name="ScopeLabel" Foreground="{DynamicResource ViewerSecondary}" FontSize="13" Margin="0,3,0,0" TextTrimming="CharacterEllipsis"/></StackPanel>
+    <TextBlock x:Name="StateLabel" Grid.Column="2" VerticalAlignment="Center" Foreground="{DynamicResource ViewerSecondary}" FontSize="13" Margin="12,0"/>
+   </Grid>
+  </Border>
+  <Border x:Name="StatePanel" Visibility="Collapsed" Background="{DynamicResource ViewerError}" CornerRadius="14" Padding="20" HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="460" Margin="26,74,26,140">
+   <StackPanel><l:FluentIcon x:Name="StateIcon" Kind="video" Width="28" Height="28" Foreground="{DynamicResource ViewerHighlight}" Margin="0,0,0,10"/>
+    <TextBlock x:Name="StateTitle" Text="正在打开视频" FontSize="20" FontWeight="SemiBold" TextAlignment="Center"/>
+    <TextBlock x:Name="StateDescription" Foreground="{DynamicResource ViewerDetail}" TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxHeight="54" TextAlignment="Center" Margin="0,8,0,12"/>
+    <ProgressBar x:Name="LoadingProgress" IsIndeterminate="True" Height="3" Width="180" Foreground="{DynamicResource ViewerFocus}"/>
+    <StackPanel x:Name="RecoveryButtons" Orientation="Horizontal" HorizontalAlignment="Center" Visibility="Collapsed">
+     <Button x:Name="RetryButton" Style="{StaticResource PrimaryButton}" Click="Retry_Click" Padding="16,10" Margin="0,0,10,0" Foreground="{DynamicResource ViewerText}" Content="重新尝试"/>
+     <Button x:Name="ExternalButton" Click="External_Click" Padding="16,10" Margin="0" Foreground="{DynamicResource ViewerText}" Background="Transparent" BorderThickness="0" Content="用其他播放器打开"/>
+    </StackPanel>
+   </StackPanel>
+  </Border>
+  <Border x:Name="FeedbackPanel" Background="{DynamicResource ViewerToast}" CornerRadius="12" Padding="22,16" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed" IsHitTestVisible="False">
+   <StackPanel Orientation="Horizontal"><l:FluentIcon x:Name="FeedbackIcon" Width="28" Height="28" Foreground="{DynamicResource ViewerText}"/><TextBlock x:Name="FeedbackText" FontSize="17" Margin="12,0,0,0" VerticalAlignment="Center"/></StackPanel>
+  </Border>
+  <Border x:Name="ControlBar" VerticalAlignment="Bottom" Background="{DynamicResource ViewerControls}" CornerRadius="12" Padding="14,8,14,12" Margin="24,0,24,22">
+   <Grid><Grid.RowDefinitions><RowDefinition Height="38"/><RowDefinition Height="54"/></Grid.RowDefinitions>
+    <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="66"/><ColumnDefinition Width="*"/><ColumnDefinition Width="66"/></Grid.ColumnDefinitions>
+     <TextBlock x:Name="ElapsedLabel" Text="00:00" FontSize="14" VerticalAlignment="Center" Margin="4,0,0,0"/>
+     <Slider x:Name="SeekBar" Grid.Column="1" Style="{StaticResource PlayerSlider}" IsEnabled="False" PreviewMouseLeftButtonDown="Seek_Down" PreviewMouseMove="Seek_Move" PreviewMouseLeftButtonUp="Seek_Up" LostMouseCapture="Seek_LostCapture" AutomationProperties.Name="播放进度"/>
+     <TextBlock x:Name="DurationLabel" Grid.Column="2" Text="--:--" FontSize="14" Foreground="{DynamicResource ViewerMuted}" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,4,0"/>
+    </Grid>
+    <Grid Grid.Row="1"><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+      <Button x:Name="PreviousButton" Style="{StaticResource PlayerButton}" Click="Previous_Click" ToolTip="上一段（Ctrl+←）" AutomationProperties.Name="上一段"><l:FluentIcon Kind="previous" Foreground="{DynamicResource ViewerText}"/></Button>
+      <Button x:Name="BackTenButton" Style="{StaticResource PlayerButton}" Click="BackTen_Click" ToolTip="后退 10 秒（←）" AutomationProperties.Name="后退10秒"><l:FluentIcon Kind="skip_back_10" Foreground="{DynamicResource ViewerText}" Width="25" Height="25"/></Button>
+      <Button x:Name="PlayButton" Style="{StaticResource PlayerButton}" Width="52" Height="52" Background="{DynamicResource ViewerAccent}" Click="Play_Click" ToolTip="播放（Space）" AutomationProperties.Name="播放"><l:FluentIcon x:Name="PlayIcon" Kind="play" Width="30" Height="30" Foreground="{DynamicResource ViewerText}"/></Button>
+      <Button x:Name="ForwardTenButton" Style="{StaticResource PlayerButton}" Click="ForwardTen_Click" ToolTip="前进 10 秒（→）" AutomationProperties.Name="前进10秒"><l:FluentIcon Kind="skip_forward_10" Foreground="{DynamicResource ViewerText}" Width="25" Height="25"/></Button>
+      <Button x:Name="NextButton" Style="{StaticResource PlayerButton}" Click="Next_Click" ToolTip="下一段（Ctrl+→）" AutomationProperties.Name="下一段"><l:FluentIcon Kind="next" Foreground="{DynamicResource ViewerText}"/></Button>
+     </StackPanel>
+     <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+      <Button x:Name="MuteButton" Style="{StaticResource PlayerButton}" Click="Mute_Click" ToolTip="静音（M）" AutomationProperties.Name="静音"><l:FluentIcon x:Name="VolumeIcon" Kind="speaker_2" Foreground="{DynamicResource ViewerText}"/></Button>
+      <Slider x:Name="VolumeBar" Width="88" Margin="0,0,8,0" VerticalAlignment="Center" Style="{StaticResource PlayerSlider}" IsMoveToPointEnabled="True" SmallChange="0.05" LargeChange="0.1" ValueChanged="Volume_Changed" AutomationProperties.Name="音量"/>
+      <Button x:Name="SpeedButton" Width="58" Style="{StaticResource PlayerButton}" Click="Speed_Click" ToolTip="播放速度" AutomationProperties.Name="播放速度"><TextBlock x:Name="SpeedLabel" Text="1×" FontSize="15" Foreground="{DynamicResource ViewerText}"/></Button>
+      <Button x:Name="FullscreenButton" Style="{StaticResource PlayerButton}" Click="Fullscreen_Click" ToolTip="全屏（F11 / 双击画面）" AutomationProperties.Name="全屏"><l:FluentIcon x:Name="FullscreenIcon" Kind="full_screen_maximize" Foreground="{DynamicResource ViewerText}"/></Button>
+      <Button x:Name="MoreButton" Style="{StaticResource PlayerButton}" Click="More_Click" ToolTip="更多操作" AutomationProperties.Name="更多操作"><l:FluentIcon Kind="more_horizontal" Foreground="{DynamicResource ViewerText}"/></Button>
+     </StackPanel>
+    </Grid>
+   </Grid>
+  </Border>
+ </Grid>
+</Window>

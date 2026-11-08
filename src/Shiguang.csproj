@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>拾光照片</AssemblyName>
+    <RootNamespace>Shiguang</RootNamespace>
+    <Version>0.2.9</Version>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <StartupObject>Shiguang.Program</StartupObject>
+    <AppHostDotNetSearch>AppRelative</AppHostDotNetSearch>
+    <AppHostRelativeDotNet>.runtime</AppHostRelativeDotNet>
+    <ApplicationIcon>Assets\Shiguang.ico</ApplicationIcon>
+  </PropertyGroup>
+  <ItemGroup><Resource Include="Assets\Shiguang.ico"/><EmbeddedResource Include="Assets\Fluent\*.svg"/><Content Include="Assets\Fluent\LICENSE.txt" CopyToOutputDirectory="PreserveNewest"/><Content Include="Assets\Demo\*" CopyToOutputDirectory="PreserveNewest"/></ItemGroup>
+  <ItemGroup><Resource Include="Assets\ThemeLandscape.png"/></ItemGroup>
+  <ItemGroup><Using Remove="System.Drawing"/><Using Remove="System.Windows.Forms"/></ItemGroup>
+</Project>

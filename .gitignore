@@ -1,0 +1,43 @@
+# Local SDK, packaged programs, media libraries and test evidence
+/.tools/
+/成品/
+/运行程序*/
+/数据/
+/演示*/
+/验证/
+/产品优化方案/
+**/bin/
+**/obj/
+**/thumbnails/
+**/.activation/
+**/.shiguang-trash/
+*.lnk
+*.sqlite
+*.sqlite-*
+*.db
+*.db-*
+session.lock
+window-preferences.json
+
+# Local credentials and machine-specific settings
+.env
+.env.*
+!.env.example
+*.pfx
+*.p12
+*.key
+*.user
+*.suo
+.vs/
+.idea/
+*.log
+*.tmp
+Thumbs.db
+desktop.ini
+
+# Historical local reports reference screenshots outside the source repository
+/按钮设计检查.md
+/播放器验收.md
+/设计规范验收.md
+/审查与验收.md
+/design-qa.md

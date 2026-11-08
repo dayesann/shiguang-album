@@ -1,0 +1,3 @@
+flower.mp4: CC0 public-domain sample video distributed by MDN interactive examples.
+Source: https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4
+Used only in the optional demonstration library and synthetic validation fixtures.
