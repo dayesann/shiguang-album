@@ -21,6 +21,7 @@ public static class Program
             ActivationTrace("Startup");
             void Lifecycle(string text) { if (traceLifecycle) File.AppendAllText(Path.Combine(AppPaths.Data, "lifecycle.log"), $"{DateTime.Now:O} pid={Environment.ProcessId} {text}\n"); }
             if (args.Contains("--worker-server")) return PreviewWorker.Serve();
+            if (args.Contains("--safety-test")) return SafetyRegression.Run();
             if (args.Contains("--viewer-test")) return ViewerTests.Run().GetAwaiter().GetResult();
             if (args.Contains("--migration-test")) return MigrationTest.Run();
             if (args.Contains("--package-test")) return PackageTests.Run();
@@ -64,9 +65,11 @@ public static class Program
             using var session = sessionStream;
             ActivationTrace("New owner");
             using var instance = new LibraryInstance(AppPaths.Data);
+            if (File.Exists(Path.Combine(AppPaths.Data, "library.sqlite"))) LibraryPackage.Validate(AppPaths.Data);
             LibraryPackage.RelocateIfNeeded(AppPaths.Data);
             using var catalog = new Catalog();
             if (demo) Demo.Seed(catalog);
+            if (args.Contains("--recovery-smoke")) RecoverySmoke.Prepare(catalog);
             var app = new Application();
             System.Windows.Media.RenderOptions.ProcessRenderMode = System.Windows.Interop.RenderMode.SoftwareOnly;
             if (traceLifecycle) UiSmoke.EnableTrace();
@@ -91,6 +94,9 @@ public static class Program
             app.SessionEnding += (_, _) => window.PrepareSessionEnd();
             app.Exit += (_, _) => { window.StopTray(); instance.Dispose(); };
             if (args.Contains("--ui-smoke")) window.Loaded += async (_, _) => await UiSmoke.Run(window, catalog);
+            if (args.Contains("--gallery-smoke")) window.Loaded += async (_, _) => await GalleryTests.Run(window, catalog);
+            if (args.Contains("--slideshow-smoke")) window.Loaded += async (_, _) => await SlideshowTests.Run(window, catalog);
+            if (args.Contains("--recovery-smoke")) window.Loaded += async (_, _) => await RecoverySmoke.Run(window, catalog);
             if (args.Contains("--components")) window.Loaded += (_, _) => window.Dispatcher.BeginInvoke(() => new ComponentGalleryWindow { Owner = window }.ShowDialog());
             if (args.Contains("--component-smoke")) window.Loaded += async (_, _) => await ComponentAcceptance.Run(window, catalog);
             bool trayTestStarted = false;

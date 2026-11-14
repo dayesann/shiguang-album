@@ -35,7 +35,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     internal Action<int>? SafeClose { get; set; }
     internal int ExitCode { get; set; }
     public bool CanMutate => !closeWhenDone;
-    public bool CanScan => !busy;
+    public bool CanScan => !busy && catalog.Operations().Count == 0;
     public bool CanFindDuplicates => !busy && catalog.Count() > 1;
     public bool CanPause => busy && canPause;
     public string PauseText => paused ? "继续" : "暂停";
@@ -43,6 +43,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     public bool InAlbum => view == "album";
     public bool ShowTimelineSwitch => view != "albums" && !IsAlbumEmpty;
     public bool IsAlbumOverview => view == "albums";
+    public bool CanPlaySlideshow => !IsAlbumOverview && kind != "video" && total > 1;
     public bool IsAlbumEmpty => InAlbum && Albums.FirstOrDefault(x => x.Id == albumId)?.Count == 0;
     public bool ShowFilters => view != "albums" && !IsAlbumEmpty;
     public GridLength FilterRowHeight => new(0);
@@ -52,8 +53,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     public bool ShowDetails => details && ShowGallery && !IsEmpty;
     public bool CanShowDetails => ShowGallery && !IsEmpty;
     public GridLength DetailWidth => new(ShowDetails ? 285 : 0);
-    public bool HasSelection => loaded.Any(p => p.Selected);
-    public string SelectionText => $"已选择 {loaded.Count(p => p.Selected):N0} 个项目";
+    public bool IsSelecting { get; private set; }
+    public string SelectionModeText => IsSelecting ? "完成" : "多选";
+    public string SelectionModeHint => IsSelecting ? "退出多选（Esc）" : "勾选多个项目";
+    public bool HasSelection => IsSelecting && selectedCount > 0;
+    public string SelectionText => $"已选择 {selectedCount:N0} 个项目";
+    public bool CanEditSelection => HasSelection && CanMutate;
+    public bool CanTrashSelection => HasSelection && CanScan && CanMutate && view != "missing";
     public bool IsEmpty => total == 0;
     public double BucketWidth => bucketWidth;
     public Photo? FocusedPhoto => focused;
@@ -62,12 +68,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     public string Summary => view == "albums" ? $"{Albums.Count} 个相册" : $"{total:N0} 个项目";
     public string DateBreadcrumb => CurrentFilter() is var f && f.Year.Length > 0 ? string.Join(" / ", new[] { f.Year + "年", f.Month.Length > 0 ? int.Parse(f.Month) + "月" : "", f.Day.Length > 0 ? int.Parse(f.Day) + "日" : "" }.Where(x => x.Length > 0)) : "全部时间";
     public bool HasStatus => busy;
-    public bool ShowFooter => busy || HasSelection;
+    public bool ShowFooter => busy || IsSelecting;
     public string EmptyHeading => IsAlbumOverview ? "还没有相册" : IsAlbumEmpty ? "这个相册还没有内容" : catalog.Count() == 0 ? "把回忆连起来" : "没有符合条件的内容";
     public bool ShowEmptyImport => !IsAlbumOverview && catalog.Count() == 0;
     public bool ShowEmptyAlbumAction => IsAlbumOverview;
     public bool ShowEmptyTimelineAction => IsAlbumEmpty && catalog.Count() > 0;
-    public string EmptyDescription => IsAlbumEmpty ? "返回时间线选择照片或视频，再点击“加入相册”。相册只保存引用，原文件保持原位。" : IsAlbumOverview ? "新建一个相册，按人物、旅行或活动收集回忆。相册只保存引用。" : catalog.Count() == 0 ? "添加已有照片或视频目录，按时间线、相册和媒体类型浏览。只建立索引，不移动原文件。" : view == "albums" ? "点击左侧相册旁的按钮新建相册，再选择媒体加入。" : "可以调整年份、月份、日期或媒体类型，也可以清空搜索条件。";
+    public string EmptyDescription => IsAlbumEmpty ? "返回时间线，点击“多选”并勾选项目，再点击“加入相册”。相册只保存引用，原文件保持原位。" : IsAlbumOverview ? "新建一个相册，按人物、旅行或活动收集回忆。相册只保存引用。" : catalog.Count() == 0 ? "添加已有照片或视频目录，按时间线、相册和媒体类型浏览。只建立索引，不移动原文件。" : view == "albums" ? "点击左侧相册旁的按钮新建相册，再选择媒体加入。" : "可以调整年份、月份、日期或媒体类型，也可以清空搜索条件。";
     public event PropertyChangedEventHandler? PropertyChanged;
     void Notify([CallerMemberName] string? name = null) => PropertyChanged?.Invoke(this, new(name));
     void NotifyAll() => PropertyChanged?.Invoke(this, new(""));
@@ -83,10 +89,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     void Window_Loaded(object sender, RoutedEventArgs e)
     {
         if (ready) return;
+        new FileOrganizer(catalog).Reconcile(); // Only reconcile moves already finished; never delete a remaining original.
         KindBox.ItemsSource = new[] { "全部媒体", "照片", "视频", "全景图", "截图" }; KindBox.SelectedIndex = 0;
         ready = true; UpdateHeaderDensity(); ReloadSidebar(); ResetDates(); RefreshPage(); UpdateMode();
         if (catalog.Count() > 0) SetStatus($"媒体库已就绪 · {catalog.Count():N0} 个项目 · 原文件保持原位");
-        if (catalog.PendingPreviews().Count > 0 || catalog.PendingVisualFingerprints().Count > 0)
+        if (catalog.Operations().Count > 0)
+            Notification.Show("有未完成的文件操作。请先核对范围并恢复任务，再扫描或整理。", "任务恢复", async () => await RecoverTasks(), error: true);
+        else if (catalog.PendingPreviews().Count > 0 || catalog.PendingVisualFingerprints().Count > 0)
             _ = RunJob("补充预览与视觉指纹", async (p, ct) => { int n = await PreviewPipeline.Enrich(catalog, p, ct); return $"已补充 {n} 项预览或视觉指纹 · 原文件未变"; });
     }
     public MediaFilter CurrentFilter() => new(view, albumId, kind, DatePart(YearBox, "全部年份"), DatePart(MonthBox, "全部月份"), DatePart(DayBox, "全部日期"), SearchBox.Text.Trim());
@@ -128,12 +137,14 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     public void RefreshPage(bool preserveSelection = false)
     {
         if (!ready) return;
-        var selected = preserveSelection ? loaded.Where(x => x.Selected).Select(x => x.Id).ToHashSet() : [];
+        var selected = preserveSelection && IsSelecting ? loaded.Where(x => x.Selected).Select(x => x.Id).ToHashSet() : [];
+        bool restoreKeyboardFocus = preserveSelection && Gallery.IsKeyboardFocusWithin;
         string? focusedId = preserveSelection ? focused?.Id : null;
         int previousCount = preserveSelection ? loaded.Count : 0;
         var scroll = UiElements.Descendants<ScrollViewer>(Gallery).FirstOrDefault(); double offset = scroll?.VerticalOffset ?? 0;
         foreach (var p in loaded) p.PropertyChanged -= Photo_Changed;
-        loaded.Clear(); Rows.Clear(); Buckets.Clear(); focused = null;
+        loaded.Clear(); Rows.Clear(); Buckets.Clear(); focused = null; selectedCount = 0;
+        if (!preserveSelection) IsSelecting = false;
         if (view == "albums")
         {
             foreach (var a in Albums) { var cover = catalog.Browse(new("album", a.Id), 0, 1).Items.FirstOrDefault(); Buckets.Add(new(a.Id, a.Name, a.Count, cover?.ThumbPath ?? "")); }
@@ -147,9 +158,20 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             foreach (var b in catalog.Buckets(f, mode == "months")) Buckets.Add(b);
             total = Buckets.Sum(b => b.Count);
         }
-        else { LoadMore(Math.Max(240, previousCount)); foreach (var p in loaded) if (selected.Contains(p.Id)) p.Selected = true; focused = loaded.FirstOrDefault(x => x.Id == focusedId) ?? focused; }
-        Reflow(); NotifyAll();
-        if (preserveSelection && scroll != null) Dispatcher.BeginInvoke(() => scroll.ScrollToVerticalOffset(offset));
+        else
+        {
+            LoadMore(Math.Max(240, previousCount));
+            updatingSelection = true;
+            foreach (var photo in loaded)
+                if (selected.Contains(photo.Id)) photo.Selected = true;
+            updatingSelection = false;
+            selectedCount = loaded.Count(photo => photo.Selected);
+            focused = loaded.FirstOrDefault(photo => photo.Id == focusedId) ?? focused;
+        }
+        if (IsEmpty) IsSelecting = false;
+        NotifyAll();
+        if (restoreKeyboardFocus && focused != null) FocusGalleryPhoto(focused);
+        else if (preserveSelection && scroll != null) Dispatcher.BeginInvoke(() => scroll.ScrollToVerticalOffset(offset));
     }
     void LoadMore(int limit = 240)
     {
@@ -166,18 +188,20 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     void Reflow()
     {
         if (!ready) return;
+        bool restoreKeyboardFocus = Gallery.IsKeyboardFocusWithin;
         double area = Math.Max(300, Gallery.ActualWidth > 50 ? Gallery.ActualWidth - 32 : ActualWidth - 380 - (ShowDetails ? 285 : 0));
         bucketWidth = Math.Max(200, Math.Floor(area / Math.Max(2, (int)(area / 270))) - 20); Notify(nameof(BucketWidth));
         var rows = GalleryLayout.Build(loaded, area, view == "timeline"); int same = 0;
         while (same < Math.Min(Rows.Count, rows.Count) && Rows[same].Label == rows[same].Label && Rows[same].Items.Select(x => (x.Photo.Id, x.Width, x.Height)).SequenceEqual(rows[same].Items.Select(x => (x.Photo.Id, x.Width, x.Height)))) same++;
         while (Rows.Count > same) Rows.RemoveAt(Rows.Count - 1);
         for (int i = same; i < rows.Count; i++) Rows.Add(rows[i]);
+        if (restoreKeyboardFocus && !Gallery.IsKeyboardFocusWithin && focused != null)
+            Dispatcher.BeginInvoke(DispatcherPriority.Input, () =>
+            {
+                if (Keyboard.FocusedElement is null || ReferenceEquals(Keyboard.FocusedElement, this))
+                    FocusGalleryPhoto(focused);
+            });
     }
-    void Photo_Changed(object? sender, PropertyChangedEventArgs e)
-    {
-        if (e.PropertyName == nameof(Photo.Selected)) { if (sender is Photo { Selected: true } p) focused = p; Notify(nameof(HasSelection)); Notify(nameof(ShowFooter)); Notify(nameof(SelectionText)); Notify(nameof(FocusedPhoto)); Notify(nameof(MembershipText)); }
-    }
-    List<Photo> Selection() => loaded.Where(p => p.Selected).ToList();
     void SetStatus(string text) { status = text; Notify(nameof(StatusText)); Notify(nameof(HasStatus)); }
     void Error(Exception e) { SetStatus(e.Message); Notification.Show(e.Message, error: true); }
     async Task RunJob(string title, Func<IProgress<JobProgress>, CancellationToken, Task<string>> work, bool pause = false, ManualResetEventSlim? pauseSignal = null)
@@ -363,7 +387,6 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     void Gallery_ScrollChanged(object sender, ScrollChangedEventArgs e) { if (ready && !loading && e.VerticalChange > 0 && e.VerticalOffset + e.ViewportHeight >= e.ExtentHeight - 6 && loaded.Count < total) LoadMore(); }
     void Album_SelectionChanged(object sender, SelectionChangedEventArgs e) { if (ready && AlbumList.SelectedItem is Album a) OpenAlbum(a.Id); }
     void Details_Click(object sender, RoutedEventArgs e) { details = !details; NotifyAll(); resize.Stop(); resize.Start(); }
-    void Tile_DoubleClick(object sender, MouseButtonEventArgs e) { if (((FrameworkElement)sender).DataContext is GalleryItem item) { e.Handled = true; Open(item.Photo); } }
     async void Open(Photo p)
     {
         if (p.IsVideo)
@@ -374,11 +397,20 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         else
         {
             var filter = CurrentFilter(); if (filter.Kind == "all") filter = filter with { Kind = "image" };
-            int count = catalog.Browse(filter, 0, 1).Total; int index = loaded.Where(x => !x.IsVideo).ToList().FindIndex(x => x.Id == p.Id);
+            int count = catalog.Browse(filter, 0, 1).Total; int index = catalog.BrowseIndex(filter, p.Id);
             new PhotoViewer(i => catalog.Browse(filter, i, 1).Items.FirstOrDefault(), count, Math.Max(0, index)) { Owner = this }.ShowDialog();
         }
     }
     void OpenFocused_Click(object sender, RoutedEventArgs e) { if (focused != null) Open(focused); }
+    void Slideshow_Click(object sender, RoutedEventArgs e)
+    {
+        if (IsAlbumOverview) return;
+        var filter = CurrentFilter(); if (filter.Kind == "all") filter = filter with { Kind = "image" };
+        int count = catalog.Browse(filter, 0, 1).Total;
+        if (count < 2) { SetStatus("当前范围至少需要两张照片才能播放幻灯片。"); return; }
+        int index = focused is { IsVideo: false } ? catalog.BrowseIndex(filter, focused.Id) : 0;
+        new PhotoViewer(i => catalog.Browse(filter, i, 1).Items.FirstOrDefault(), count, Math.Max(0, index)) { Owner = this, AutoPlay = true }.ShowDialog();
+    }
     void CopyPath_Click(object sender, RoutedEventArgs e) { if (focused != null) { Clipboard.SetText(focused.Path); SetStatus("已复制原文件路径"); Notification.Show("已复制文件路径"); } }
     void NewAlbum_Click(object sender, RoutedEventArgs e)
     {
@@ -389,7 +421,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         var selected = Selection(); if (selected.Count == 0) return;
         var album = Dialogs.ChooseAlbum(this, catalog.Albums(), name => { string id = catalog.CreateAlbum(name); ReloadSidebar(); return new Album(id, name, 0); }, selected.Count); if (album == null) return;
-        catalog.AddToAlbum(album.Id, selected); ReloadSidebar(); Notify(nameof(MembershipText)); SetStatus($"已将 {selected.Count} 个引用加入“{album.Name}”，原文件未变"); Notification.Show($"已将 {selected.Count:N0} 个项目加入“{album.Name}”");
+        catalog.AddToAlbum(album.Id, selected);
+        ReloadSidebar();
+        SetSelectionMode(false);
+        if (focused != null) FocusGalleryPhoto(focused);
+        Notify(nameof(MembershipText));
+        SetStatus($"已将 {selected.Count} 个引用加入“{album.Name}”，原文件未变");
+        Notification.Show($"已将 {selected.Count:N0} 个项目加入“{album.Name}”");
     }
     void RemoveFromAlbum_Click(object sender, RoutedEventArgs e) { if (InAlbum) { catalog.RemoveFromAlbum(albumId, Selection()); ReloadSidebar(); RefreshPage(); SetStatus("已移除相册引用，原文件未变"); } }
     void Favorite_Click(object sender, RoutedEventArgs e) { var selected = Selection(); bool favorite = !selected.All(p => p.Favorite); catalog.Favorite(selected, favorite); RefreshPage(); Notification.Show(favorite ? $"已收藏 {selected.Count:N0} 个项目" : "已取消收藏"); }
@@ -410,9 +448,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     static void Item(ContextMenu menu, string text, Action action) { var item = new MenuItem { Header = text }; item.Click += (_, _) => action(); menu.Items.Add(item); }
     void More_Click(object sender, RoutedEventArgs e) => OpenSettings();
     async void Trash_Click(object sender, RoutedEventArgs e) => await OpenTrash();
-    async void DeleteSelection_Click(object sender, RoutedEventArgs e)
+    async void DeleteSelection_Click(object sender, RoutedEventArgs e) => await DeleteSelection();
+    async Task DeleteSelection()
     {
-        var selected = Selection(); if (busy || selected.Count == 0) return;
+        if (!CanTrashSelection) return;
+        var selected = Selection();
         var confirm = new ConfirmationWindow($"将 {selected.Count:N0} 个项目移入回收站？", "文件会移入来源目录的回收站。可以随时恢复，相册关系也会保留。", "移入回收站", photos: selected) { Owner = this };
         if (confirm.ShowDialog() != true) return;
         var organizer = new FileOrganizer(catalog);
@@ -441,8 +481,24 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     public Task RelinkSource(string oldRoot, string newRoot) => RunJob("校验并重新连接来源目录", async (progress, ct) =>
     {
         int count = await Task.Run(() => catalog.RelinkRoot(oldRoot, newRoot), ct);
+        await PreviewPipeline.Enrich(catalog, progress, ct);
         return $"已重新连接 {count:N0} 个项目，相册和标签已保留";
     });
+    public async Task RecoverTasks()
+    {
+        if (busy) return;
+        var pending = catalog.Operations();
+        if (pending.Count == 0) { Notification.Show("没有未完成任务"); return; }
+        var review = new RecoveryWindow(pending) { Owner = this };
+        if (review.ShowDialog() != true) return;
+        var organizer = new FileOrganizer(catalog);
+        await RunJob("恢复文件操作", async (progress, ct) =>
+        {
+            int count = await Task.Run(() => review.CancelUntouched ? organizer.CancelUntouched() : organizer.ResumePending(progress, ct), ct);
+            return $"已处理 {count:N0} 项任务 · 剩余 {catalog.Operations().Count:N0} 项";
+        });
+        Notification.Show(StatusText, error: catalog.Operations().Count > 0);
+    }
     void ClearDate_Click(object sender, RoutedEventArgs e) { ResetDates(); RefreshPage(); }
     void LibraryMore_Click(object sender, RoutedEventArgs e)
     {
@@ -467,14 +523,6 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     }
     void Pause_Click(object sender, RoutedEventArgs e) { if (!CanPause || activePause == null) return; paused = !paused; if (paused) activePause.Reset(); else activePause.Set(); Notify(nameof(PauseText)); }
     void Stop_Click(object sender, RoutedEventArgs e) { cancellation?.Cancel(); activePause?.Set(); indexer.Pause.Set(); SetStatus("正在安全停止…"); }
-    void Window_KeyDown(object sender, KeyEventArgs e)
-    {
-        if (e.Key == Key.F && Keyboard.Modifiers == ModifierKeys.Control) { SearchBox.Focus(); SearchBox.SelectAll(); e.Handled = true; return; }
-        if (Keyboard.FocusedElement is TextBox or ComboBox || e.Key == Key.Space && Keyboard.FocusedElement is System.Windows.Controls.Primitives.ButtonBase) return;
-        if (e.Key == Key.A && Keyboard.Modifiers == ModifierKeys.Control) { foreach (var p in loaded) p.Selected = true; e.Handled = true; }
-        else if (e.Key == Key.Escape) foreach (var p in loaded) p.Selected = false;
-        else if (e.Key == Key.Space && focused != null) { e.Handled = true; Open(focused); }
-    }
     void Window_Closing(object? sender, CancelEventArgs e)
     {
         if (!exitRequested && !sessionEnding && HasTray && WindowBehaviorSettings.CloseToTray)

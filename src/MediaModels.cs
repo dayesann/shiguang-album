@@ -13,7 +13,7 @@ public sealed partial class Photo
     public string Tags { get; set; } = "";
     public long Revision { get; set; }
     public string ThumbKey => ThumbPath + "|" + Revision;
-    public string LargePath => System.IO.Path.Combine(AppPaths.Data, "previews", Id + "-" + Modified + ".jpg");
+    public string LargePath => AppPaths.CachePath("previews", Id, "-" + Modified.ToString(System.Globalization.CultureInfo.InvariantCulture));
     public bool IsVideo => MediaKind == "video";
     public bool IsPanorama => ContentKind == "panorama";
     public bool IsScreenshot => ContentKind == "screenshot";

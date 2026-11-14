@@ -54,6 +54,8 @@ public static class LibraryPackage
         if (File.Exists(settings)) File.Copy(settings, Path.Combine(staging, "settings.json"));
         var windowPreferences = Path.Combine(AppPaths.Data, "window-preferences.json");
         if (File.Exists(windowPreferences)) File.Copy(windowPreferences, Path.Combine(staging, "window-preferences.json"));
+        var slideshowPreferences = Path.Combine(AppPaths.Data, "slideshow-preferences.json");
+        if (File.Exists(slideshowPreferences)) File.Copy(slideshowPreferences, Path.Combine(staging, "slideshow-preferences.json"));
         var manifest = new Manifest(1, includeMedia, final, DateTime.UtcNow.ToString("O"), entries);
         using (var db = new NativeDb(Path.Combine(staging, "library.sqlite")))
         {
@@ -103,7 +105,7 @@ public static class LibraryPackage
         if (manifest.IncludesMedia)
             foreach (var item in manifest.Files)
             {
-                if (string.IsNullOrWhiteSpace(item.Id)) throw new IOException("媒体库清单缺少项目标识。");
+                AppPaths.ValidateId(item.Id);
                 Resolve(folder, item.Path); Resolve(folder, item.Root); if (item.OriginalPath.Length > 0) Resolve(folder, item.OriginalPath);
             }
         return manifest;
@@ -114,6 +116,7 @@ public static class LibraryPackage
         Read(folder);
         using var db = new NativeDb(Path.Combine(folder, "library.sqlite"), true);
         if (db.Query("PRAGMA quick_check")[0][0] != "ok" || !db.Query("PRAGMA table_info(photos)").Any(r => r[1] == "path")) throw new IOException("不是有效的时光媒体库。");
+        foreach (var row in db.Query("SELECT id FROM photos")) AppPaths.ValidateId(row[0]);
     }
     public static void RelocateIfNeeded(string folder)
     {

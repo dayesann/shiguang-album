@@ -9,6 +9,12 @@ public sealed partial class Catalog : IDisposable
     public Catalog(bool readOnly = false)
     {
         db = new NativeDb(Path.Combine(AppPaths.Data, "library.sqlite"), readOnly);
+        try
+        {
+            if (db.Query("SELECT name FROM sqlite_master WHERE type='table' AND name='photos'").Count > 0)
+                foreach (var row in db.Query("SELECT id FROM photos")) AppPaths.ValidateId(row[0]);
+        }
+        catch { db.Dispose(); throw; }
         if (readOnly) return;
         db.Run("CREATE TABLE IF NOT EXISTS photos(id TEXT PRIMARY KEY,path TEXT NOT NULL COLLATE NOCASE UNIQUE,root TEXT NOT NULL,size INTEGER,modified INTEGER,taken TEXT,date_source TEXT,width INTEGER,height INTEGER,hash TEXT,visual_hash TEXT,sharpness REAL,brightness REAL,error TEXT,status TEXT NOT NULL DEFAULT 'active',original_path TEXT NOT NULL DEFAULT '',trash_date TEXT NOT NULL DEFAULT '',favorite INTEGER DEFAULT 0)");
         db.Run("CREATE INDEX IF NOT EXISTS photos_time ON photos(status,taken DESC,id)");
@@ -30,6 +36,7 @@ public sealed partial class Catalog : IDisposable
     public Photo? ById(string id) => db.Query("SELECT * FROM photos WHERE id=?", id).Select(Map).FirstOrDefault();
     public void Upsert(Photo p)
     {
+        AppPaths.ValidateId(p.Id);
         db.Run("INSERT INTO photos VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET path=excluded.path,root=excluded.root,size=excluded.size,modified=excluded.modified,taken=excluded.taken,date_source=excluded.date_source,width=excluded.width,height=excluded.height,hash=excluded.hash,visual_hash=excluded.visual_hash,sharpness=excluded.sharpness,brightness=excluded.brightness,error=excluded.error,status=excluded.status,original_path=excluded.original_path,trash_date=excluded.trash_date,favorite=excluded.favorite,media_kind=excluded.media_kind,content_kind=excluded.content_kind,duration=excluded.duration,added=excluded.added,preview_state=excluded.preview_state,manual_kind=excluded.manual_kind,tags=excluded.tags,revision=excluded.revision", p.Id, p.Path, p.Root, p.Size, p.Modified, p.Taken, p.DateSource, p.Width, p.Height, p.Hash, p.VisualHash, p.Sharpness, p.Brightness, p.Error, p.Status, p.OriginalPath, p.TrashDate, p.Favorite, p.MediaKind, p.ContentKind, p.Duration, p.Added, p.PreviewState, p.ManualKind, p.Tags, p.Revision);
     }
     public void UpsertMany(IEnumerable<Photo> photos) => db.Transaction(() => { foreach (var p in photos) Upsert(p); });

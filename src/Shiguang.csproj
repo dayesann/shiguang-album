@@ -8,7 +8,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>拾光照片</AssemblyName>
     <RootNamespace>Shiguang</RootNamespace>
-    <Version>0.2.9</Version>
+    <Version>0.2.12</Version>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <StartupObject>Shiguang.Program</StartupObject>
     <AppHostDotNetSearch>AppRelative</AppHostDotNetSearch>
@@ -17,5 +17,6 @@
   </PropertyGroup>
   <ItemGroup><Resource Include="Assets\Shiguang.ico"/><EmbeddedResource Include="Assets\Fluent\*.svg"/><Content Include="Assets\Fluent\LICENSE.txt" CopyToOutputDirectory="PreserveNewest"/><Content Include="Assets\Demo\*" CopyToOutputDirectory="PreserveNewest"/></ItemGroup>
   <ItemGroup><Resource Include="Assets\ThemeLandscape.png"/></ItemGroup>
+  <ItemGroup><Content Include="Assets\Music\*" CopyToOutputDirectory="PreserveNewest"/></ItemGroup>
   <ItemGroup><Using Remove="System.Drawing"/><Using Remove="System.Windows.Forms"/></ItemGroup>
 </Project>

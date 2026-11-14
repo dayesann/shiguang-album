@@ -80,6 +80,7 @@ public static class ComponentAcceptance
             Check(confirm.ActualHeight < 400 && confirm.ConfirmButton.ActualHeight == 32, "confirmation sizes to content with compact actions");
             UiSmoke.Save(confirm, "08-永久删除确认.png"); confirm.Close(); opened.Remove(confirm);
             ThemeManager.SetPreference("light"); main.OpenAlbum(catalog.Albums().First().Id); await Settle();
+            Click((Button)main.FindName("SelectionModeButton"));
             var selected = main.Rows.SelectMany(r => r.Items).First().Photo; selected.Selected = true; await Settle();
             int membership = catalog.AlbumPhotos(catalog.Albums().First().Id).Count;
             var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(80) };

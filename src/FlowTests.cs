@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 
 namespace Shiguang;
@@ -53,6 +54,19 @@ public static class FlowTests
             Check(main.IsAlbumEmpty && main.ShowEmptyTimelineAction && !main.ShowFilters, "new empty album guides users back to select indexed media");
             UiSmoke.Save(main, "06-空相册下一步.png"); catalog.AddToAlbum(album, items.Take(3)); await main.RescanSources(); Click(Nav("timeline")); await Settle();
             Check(main.Rows.SelectMany(x => x.Items).Count() == 240, "gallery initially loads a bounded page rather than the whole library");
+            var firstPage = main.Rows.SelectMany(row => row.Items).Select(item => item.Photo).ToList();
+            var pageGallery = (ListBox)main.FindName("Gallery");
+            pageGallery.ScrollIntoView(main.Rows.First(row => row.Items.Any(item => item.Photo.Id == firstPage[230].Id)));
+            pageGallery.UpdateLayout();
+            var pageTile = UiElements.Descendants<Button>(pageGallery).First(button => button.DataContext is GalleryItem item && item.Photo.Id == firstPage[230].Id);
+            pageTile.Focus();
+            for (int step = 0; step < 15; step++)
+            {
+                ((UIElement)Keyboard.FocusedElement).RaiseEvent(new KeyEventArgs(Keyboard.PrimaryDevice, PresentationSource.FromVisual(main), Environment.TickCount, Key.Right)
+                { RoutedEvent = Keyboard.PreviewKeyDownEvent });
+            }
+            Check(catalog.BrowseIndex(main.CurrentFilter(), main.FocusedPhoto!.Id) == 245 && !main.HasSelection,
+                "keyboard navigation crosses the 240-item load boundary without selecting photos");
             var search = (TextBox)main.FindName("SearchBox"); search.Text = "不可能匹配的词"; await Settle(); main.OpenAlbum(album); await Settle();
             Check(search.Text.Length == 0 && main.Rows.Count > 0, "opening an album clears the old search filter");
             Check(main.InAlbum && main.Heading.StartsWith("家庭旅行", StringComparison.Ordinal), "long album title is active before alignment comparison");
@@ -60,6 +74,7 @@ public static class FlowTests
             search.Text = "不可能匹配的词"; await Settle(); Click(Nav("image")); await Settle();
             Check(search.Text.Length == 0 && main.CurrentFilter().View == "media", "switching media category resets unrelated search and album state");
             Check(((SolidColorBrush)Nav("image").Background).Color == ((SolidColorBrush)Application.Current.FindResource("Selected")).Color, "current media navigation has a persistent selected state");
+            Click((Button)main.FindName("SelectionModeButton"));
             var selected = main.Rows.SelectMany(r => r.Items).First().Photo; selected.Selected = true; await main.RescanSources(); await Settle();
             Check(main.Rows.SelectMany(r => r.Items).Any(x => x.Photo.Id == selected.Id && x.Photo.Selected), "background rescan preserves current selection");
             main.OpenAlbum(album); main.Width = 1150; main.Height = 750; await Settle(); UiSmoke.Save(main, "03-长相册名与最小窗口.png");

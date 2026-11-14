@@ -5,7 +5,7 @@ using System.Windows.Media;
 
 namespace Shiguang;
 
-public sealed class PhotoViewer : Window
+public sealed partial class PhotoViewer : Window
 {
     readonly Func<int, Photo?> fetch;
     readonly int count;
@@ -28,14 +28,41 @@ public sealed class PhotoViewer : Window
         var buttons = new WrapPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right }; toolbar.Children.Add(buttons);
         buttons.Children.Add(IconButton("zoom_out", "缩小", () => Zoom(scale.ScaleX / 1.25), false)); buttons.Children.Add(zoomLabel); buttons.Children.Add(IconButton("zoom_in", "放大", () => Zoom(scale.ScaleX * 1.25), false));
         buttons.Children.Add(IconButton("grid", "适应窗口", Fit)); buttons.Children.Add(IconButton("full_screen_maximize", "全屏 F11", Fullscreen)); buttons.Children.Add(IconButton("dismiss", "关闭", Close));
+        AddPlaybackControls(body);
         description.MaxHeight = 76; description.TextTrimming = TextTrimming.CharacterEllipsis;
         var bottom = new DockPanel { Margin = new(0, 15, 0, 0) }; DockPanel.SetDock(bottom, Dock.Bottom); body.Children.Add(bottom);
         var nav = new StackPanel { Orientation = Orientation.Horizontal }; DockPanel.SetDock(nav, Dock.Right); bottom.Children.Add(nav);
         nav.Children.Add(IconButton("arrow_left", "上一张", () => Navigate(-1))); nav.Children.Add(IconButton("arrow_right", "下一张", () => Navigate(1))); bottom.Children.Add(description);
         scroll.Content = image; image.LayoutTransform = scale; body.Children.Add(scroll);
         scroll.PreviewMouseWheel += (_, e) => { Zoom(scale.ScaleX * (e.Delta > 0 ? 1.2 : 1 / 1.2)); e.Handled = true; };
-        KeyDown += (_, e) => { if (e.Key == Key.Right) Navigate(1); else if (e.Key == Key.Left) Navigate(-1); else if (e.Key == Key.Escape) { if (WindowStyle == WindowStyle.None) Fullscreen(); else Close(); } else if (e.Key == Key.F11) Fullscreen(); };
-        Loaded += (_, _) => Load(); Closed += (_, _) => { generation++; requestCancel.Cancel(); requestCancel.Dispose(); };
+        KeyDown += (_, e) =>
+        {
+            if (e.Handled || Keyboard.Modifiers != ModifierKeys.None
+                || e.OriginalSource is System.Windows.Controls.Primitives.RangeBase or ComboBoxItem or ComboBox) return;
+            switch (e.Key)
+            {
+                case Key.Right or Key.Down or Key.PageDown:
+                    Navigate(1);
+                    break;
+                case Key.Left or Key.Up or Key.PageUp:
+                    Navigate(-1);
+                    break;
+                case Key.Space when e.OriginalSource is not Button and not CheckBox:
+                    ToggleSlideshow();
+                    break;
+                case Key.Escape:
+                    if (WindowStyle == WindowStyle.None) Fullscreen();
+                    else Close();
+                    break;
+                case Key.F11:
+                    Fullscreen();
+                    break;
+                default:
+                    return;
+            }
+            e.Handled = true;
+        };
+        Loaded += (_, _) => { if (AutoPlay) SetPlaying(true); Load(); }; Closed += (_, _) => { ClosePlayback(); generation++; requestCancel.Cancel(); requestCancel.Dispose(); };
         SizeChanged += (_, _) => { if (Math.Abs(scale.ScaleX - 1) < .01) Fit(); };
     }
     public static Button DarkButton(string text, Action action)
@@ -54,14 +81,17 @@ public sealed class PhotoViewer : Window
     void Navigate(int offset) { index = (index + offset + count) % count; Load(); }
     async void Load()
     {
+        slideTimer.Stop(); imageReady = false;
         requestCancel.Cancel(); requestCancel.Dispose(); requestCancel = new(); var token = requestCancel.Token;
-        int request = ++generation; var p = fetch(index); image.Source = null;
-        if (p == null) { description.Text = "当前项目不再可用，请关闭预览后刷新媒体库。"; return; }
+        int request = ++generation; Photo? p; image.Source = null;
+        try { p = fetch(index); }
+        catch (Exception e) { SetPlaying(false); description.Text = "无法读取当前照片：" + e.Message; return; }
+        if (p == null) { SetPlaying(false); description.Text = "当前项目不再可用，请关闭预览后刷新媒体库。"; return; }
         Title = p.Name + " · 时光相册";
         description.Text = $"{index + 1} / {count}   {p.Name}   {p.Details}\n{p.DateLabel} · {p.DateSource}   {p.Path}"; description.ToolTip = description.Text;
-        try { var cache = await PreviewSession.Large(p, token); token.ThrowIfCancellationRequested(); var source = await Task.Run(() => Imaging.Decode(cache, 0), token); if (request != generation) return; image.Source = source; Fit(); }
+        try { var cache = await PreviewSession.Large(p, token); token.ThrowIfCancellationRequested(); var source = await Task.Run(() => Imaging.Decode(cache, 0), token); if (request != generation) return; image.Source = source; imageReady = true; Fit(); RestartSlideTimer(); }
         catch (OperationCanceledException) { }
-        catch (Exception e) { if (request == generation) description.Text += "\n无法显示：" + e.Message; }
+        catch (Exception e) { if (request == generation) { SetPlaying(false); description.Text += "\n无法显示，已暂停自动播放：" + e.Message; } }
     }
     void Fit()
     {
