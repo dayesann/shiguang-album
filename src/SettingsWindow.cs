@@ -182,6 +182,8 @@ public sealed class SettingsWindow : Window
             var stack = new StackPanel(); stack.Children.Add(Label(value, 26, false, true)); stack.Children.Add(Label(name, 13, true, margin: new(0, 8, 0, 0))); var card = Card(stack, new(18)); card.Margin = new(5, 0, 5, 0); stats.Children.Add(card);
         }
         page.Children.Add(stats);
+        if (catalog.Operations().Count > 0)
+            page.Children.Add(ActionRow("任务恢复", $"{catalog.Operations().Count:N0} 项未完成操作；核对源位置和目标位置后继续，或取消未开始任务。", "任务恢复", () => { Close(); _ = main.RecoverTasks(); }));
         page.Children.Add(ActionRow("重复照片", "比较副本，选择需要保留的内容。", "检查重复", () => { Close(); _ = main.ReviewDuplicates(); }, true, catalog.Count() > 1));
         page.Children.Add(ActionRow("回收站", $"{catalog.Count("trash"):N0} 个项目，可恢复或永久删除。", catalog.Count("trash") > 0 ? $"查看 {catalog.Count("trash"):N0} 项" : "暂无内容", () => { Close(); _ = main.OpenTrash(); }, false, catalog.Count("trash") > 0));
         page.Children.Add(ActionRow("媒体检查", "预览失败、离线项目与未归类内容。", "查看内容", Maintenance));

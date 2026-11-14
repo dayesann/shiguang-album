@@ -539,11 +539,29 @@ public sealed class RecoveryWindow : Window
         var intro = new TextBlock { Text = "未完成任务可校验后继续。取消只处理源文件完整、目标尚未生成的任务；不会撤销已完成的移动。", TextWrapping = TextWrapping.Wrap, Margin = new(0, 0, 0, 18), FontSize = 16 };
         ThemeManager.Resource(intro, TextBlock.ForegroundProperty, "Muted"); DockPanel.SetDock(intro, Dock.Top); body.Children.Add(intro);
         var footer = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new(0, 18, 0, 0) }; DockPanel.SetDock(footer, Dock.Bottom); body.Children.Add(footer);
-        footer.Children.Add(Dialogs.Button("关闭", () => DialogResult = false));
+        var close = Dialogs.Button("关闭", () => DialogResult = false); close.IsCancel = true; footer.Children.Add(close);
+        Loaded += (_, _) => close.Focus();
         footer.Children.Add(Dialogs.Button("取消未开始任务", () => { CancelUntouched = true; DialogResult = true; }));
         footer.Children.Add(Dialogs.Button("校验并继续未完成任务", () => DialogResult = true, true));
-        var grid = new DataGrid { ItemsSource = operations, IsReadOnly = true };
-        foreach (var c in new[] { ("状态", "State", 100d), ("操作", "Kind", 70d), ("源位置", "Source", 310d), ("目标位置", "Target", 310d), ("错误", "Error", 220d) }) grid.Columns.Add(new DataGridTextColumn { Header = c.Item1, Binding = new Binding(c.Item2), Width = c.Item3 });
+        var grid = new DataGrid { ItemsSource = operations.Select(o => new
+        {
+            State = o.State switch { "Prepared" => "等待处理", "TargetReady" => "副本已就绪", "NeedsReview" => "需要核对", _ => o.State },
+            Kind = o.Kind switch { "trash" => "移入回收站", "restore" => "恢复", "archive" => "归档", "undo" => "撤销归档", "purge" => "永久删除", _ => o.Kind },
+            o.Source, o.Target, o.Error
+        }).ToList(), IsReadOnly = true, RowHeight = double.NaN };
+        var rowStyle = new Style(typeof(DataGridRow));
+        rowStyle.Setters.Add(new Setter(BackgroundProperty, new DynamicResourceExtension("Surface")));
+        rowStyle.Setters.Add(new Setter(ForegroundProperty, new DynamicResourceExtension("Text"))); grid.RowStyle = rowStyle;
+        var headerStyle = new Style(typeof(System.Windows.Controls.Primitives.DataGridColumnHeader));
+        headerStyle.Setters.Add(new Setter(BackgroundProperty, new DynamicResourceExtension("Side")));
+        headerStyle.Setters.Add(new Setter(ForegroundProperty, new DynamicResourceExtension("Text"))); grid.ColumnHeaderStyle = headerStyle;
+        foreach (var c in new[] { ("状态", "State", 100d), ("操作", "Kind", 110d), ("源位置", "Source", 310d), ("目标位置", "Target", 310d), ("错误", "Error", 220d) })
+        {
+            var textStyle = new Style(typeof(TextBlock));
+            textStyle.Setters.Add(new Setter(TextBlock.TextWrappingProperty, TextWrapping.Wrap));
+            textStyle.Setters.Add(new Setter(ToolTipProperty, new Binding(c.Item2)));
+            grid.Columns.Add(new DataGridTextColumn { Header = c.Item1, Binding = new Binding(c.Item2), Width = c.Item3, ElementStyle = textStyle });
+        }
         body.Children.Add(grid);
     }
 }

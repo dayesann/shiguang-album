@@ -31,6 +31,7 @@ public static class UiSmoke
             main.SetCategory("screenshot"); await Settle(); Check(main.Rows.SelectMany(r => r.Items).All(i => i.Photo.IsScreenshot), "screenshot view works independently"); Save(main, "06-截图.png");
             main.SetCategory("video"); await Settle(); Check(main.Rows.SelectMany(r => r.Items).Any(i => i.Photo.IsVideo), "video view has real video files"); Save(main, "07-视频.png");
             main.OpenAlbum(catalog.Albums().First().Id); await Settle(); Check(main.InAlbum && main.Rows.Count > 0, "virtual mixed album view resolves"); Save(main, "08-相册.png");
+            ((Button)main.FindName("SelectionModeButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             var p = main.Rows.SelectMany(r => r.Items).First().Photo; p.Selected = true; await Settle(); Check(main.HasSelection, "selection enables reference-only actions");
             ((Button)main.FindName("DetailsButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); await Settle(); Check(main.ShowDetails && main.DetailWidth.Value == 285, "detail panel can open without replacing gallery"); Save(main, "11-详情栏.png");
             ((Button)main.FindName("DetailsButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); await Settle();

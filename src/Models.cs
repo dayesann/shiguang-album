@@ -42,7 +42,7 @@ public sealed partial class Photo : Observable
     public bool Favorite { get; set; }
     internal int DuplicateVisit { get; set; }
     bool selected;
-    public bool Selected { get => selected; set { selected = value; Notify(); } }
+    public bool Selected { get => selected; set { if (selected == value) return; selected = value; Notify(); } }
     public string ThumbPath => AppPaths.Thumb(Id);
     public string Name => System.IO.Path.GetFileName(OriginalPath.Length > 0 && Status == "trash" ? OriginalPath : Path);
     public string Month => Taken.Length >= 7 ? Taken[..7] : "日期待确认";
@@ -91,6 +91,21 @@ public static class AppPaths
         Directory.CreateDirectory(Data);
         Directory.CreateDirectory(System.IO.Path.Combine(Data, "thumbnails"));
     }
-    public static string Thumb(string id) => System.IO.Path.Combine(Data, "thumbnails", id + ".jpg");
+    public static void ValidateId(string id)
+    {
+        // Keep legacy non-GUID identifiers, but never allow path syntax in a file key.
+        if (string.IsNullOrEmpty(id) || id.Length > 160 || id.Any(c => !char.IsAsciiLetterOrDigit(c) && c is not ('-' or '_')))
+            throw new IOException("媒体库含不安全的项目标识，已停止操作。");
+    }
+    public static string CachePath(string directory, string id, string suffix)
+    {
+        ValidateId(id);
+        var root = System.IO.Path.GetFullPath(System.IO.Path.Combine(Data, directory));
+        var target = System.IO.Path.GetFullPath(System.IO.Path.Combine(root, id + suffix + ".jpg"));
+        if (!Within(target, root)) throw new IOException("缓存路径超出媒体库。");
+        LibraryService.NoLinks(target);
+        return target;
+    }
+    public static string Thumb(string id) => CachePath("thumbnails", id, "");
     public static bool Within(string path, string root) => path.Equals(root, StringComparison.OrdinalIgnoreCase) || path.StartsWith(root.TrimEnd('\\') + "\\", StringComparison.OrdinalIgnoreCase);
 }

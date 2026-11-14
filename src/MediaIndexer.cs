@@ -34,6 +34,7 @@ public sealed partial class MediaIndexer(Catalog catalog)
     }
     public ScanResult Scan(string root, IProgress<JobProgress> progress, CancellationToken ct)
     {
+        if (catalog.Operations().Count > 0) throw new IOException("存在未完成文件操作，请先在设置的任务恢复中处理，再重新扫描。");
         root = System.IO.Path.GetFullPath(root);
         if (!Directory.Exists(root)) throw new IOException("来源目录不可访问：" + root);
         LibraryService.NoLinks(root);

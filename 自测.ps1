@@ -10,6 +10,10 @@ $taskRun = Join-Path $taskRoot ('验证\自测-' + (Get-Date -Format 'yyyyMMdd-H
 New-Item -ItemType Directory -Path $taskRun | Out-Null
 & (Join-Path $taskRoot '工具\设计规范检查.ps1')
 $taskCases = @(
+    @{ Name='浏览与多选键盘'; Args=@('--demo','--gallery-smoke'); Result='gallery-results.json' },
+    @{ Name='幻灯片与背景音乐'; Args=@('--slideshow-smoke'); Result='slideshow-results.json' },
+    @{ Name='文件安全边界'; Args=@('--safety-test'); Result='safety-results.json' },
+    @{ Name='异常恢复入口'; Args=@('--recovery-smoke'); Result='recovery-results.json' },
     @{ Name='后台任务与托盘'; Args=@('--tray-smoke'); Result='tray-results.json' },
     @{ Name='后台退出后重开'; DataCase='后台任务与托盘'; Args=@('--tray-verify'); Result='tray-restart-results.json' },
     @{ Name='紧凑控件与撤销'; Args=@('--demo','--component-smoke'); Result='component-results.json' },
@@ -22,9 +26,9 @@ $taskCases = @(
     @{ Name='设计规范验收'; Args=@('--demo','--design-smoke'); Result='design-acceptance-results.json' },
     @{ Name='旧库升级'; Args=@('--migration-test'); Result='migration-results.json' },
     @{ Name='十万索引'; Args=@('--scale-test'); Result='scale-results.json' },
-    @{ Name='视频控制'; Args=@('--video-smoke',(Join-Path $taskRoot '成品\运行程序-0.2.9\Assets\Demo\flower.mp4')); Result='video-playback-results.json' }
+    @{ Name='视频控制'; Args=@('--video-smoke',(Join-Path $taskRoot ('成品\运行程序-' + $taskVersion + '\Assets\Demo\flower.mp4'))); Result='video-playback-results.json' }
 )
-if ($CoreOnly) { $taskCases = @($taskCases | Where-Object { $_.Name -in @('媒体库迁移','核心去重与恢复','媒体索引','旧库升级') }) }
+if ($CoreOnly) { $taskCases = @($taskCases | Where-Object { $_.Name -in @('文件安全边界','媒体库迁移','核心去重与恢复','媒体索引','旧库升级') }) }
 $taskResults = @()
 foreach ($taskCase in $taskCases) {
     $taskData = Join-Path $taskRun ($(if ($taskCase.ContainsKey('DataCase')) { $taskCase.DataCase } else { $taskCase.Name }) + '\data')
