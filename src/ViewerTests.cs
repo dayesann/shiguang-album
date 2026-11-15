@@ -54,7 +54,28 @@ public static class ViewerTests
             string album = catalog.CreateAlbum("家庭旅行"); var media = catalog.AllActive().Where(p => p.Error.Length == 0).ToList(); catalog.AddToAlbum(album, media);
             Check(catalog.Browse(new("album", album)).Total == media.Count, "one virtual album holds mixed media");
             Check(catalog.Browse(new("album", album, "panorama")).Total == 1, "media filtering works inside mixed albums");
+            Album CurrentAlbum() => catalog.Albums().Single(x => x.Id == album);
+            var autoCover = catalog.AlbumCover(CurrentAlbum());
+            Check(autoCover.Length > 0 && autoCover != pA.ThumbKey, "existing albums default to the most recent active item");
+            Check(!catalog.TrySetAlbumCover(album, catalog.ByPath(bad)!.Id), "a photo outside the album cannot be its cover");
+            if (video != null) Check(!catalog.TrySetAlbumCover(album, catalog.ByPath(video)!.Id), "a video cannot replace a custom cover");
+            Check(catalog.TrySetAlbumCover(album, pA.Id) && catalog.AlbumCover(CurrentAlbum()) == pA.ThumbKey,
+                "custom cover overrides the automatic cover");
+            using (var reopened = new Catalog(readOnly: true))
+                Check(reopened.Albums().Single(x => x.Id == album).CoverPhotoId == pA.Id, "cover selection persists in the database");
+            string coverBackup = System.IO.Path.Combine(AppPaths.Data, "album-cover.albums.json");
+            AlbumBackup.Export(catalog, coverBackup);
+            AlbumBackup.Import(catalog, coverBackup);
+            Check(catalog.Albums().Single(x => x.Name == "家庭旅行（导入）").CoverPhotoId == pA.Id, "album reference backup round-trips the custom cover");
+            catalog.MarkMissing(pA.Id);
+            Check(catalog.AlbumCover(CurrentAlbum()) == autoCover && CurrentAlbum().CoverPhotoId == pA.Id, "offline cover falls back without losing the choice");
+            catalog.Upsert(pA);
+            Check(catalog.AlbumCover(CurrentAlbum()) == pA.ThumbKey, "cover returns after its photo is online again");
+            catalog.ResetAlbumCover(album);
+            Check(CurrentAlbum().CoverPhotoId.Length == 0 && catalog.AlbumCover(CurrentAlbum()) == autoCover, "reset restores the automatic cover");
+            Check(catalog.TrySetAlbumCover(album, pA.Id), "album member can be selected again");
             catalog.RemoveFromAlbum(album, [pA]); Check(catalog.Browse(new("album", album)).Total == media.Count - 1 && File.Exists(a), "removing album item only removes reference");
+            Check(CurrentAlbum().CoverPhotoId.Length == 0 && catalog.AlbumCover(CurrentAlbum()) == autoCover, "removing the cover from the album clears its reference");
             catalog.SetTags([pB], "国庆 旅行"); Check(catalog.Browse(new(Search: "国庆")).Total == 1, "tag search queries index only");
             catalog.SetKind([pB], "screenshot"); Check(catalog.ById(pB.Id)!.ManualKind, "manual classification is explicit");
             catalog.SetDate([pB], new DateTime(2014, 12, 31));

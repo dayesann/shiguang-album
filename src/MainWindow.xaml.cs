@@ -147,7 +147,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (!preserveSelection) IsSelecting = false;
         if (view == "albums")
         {
-            foreach (var a in Albums) { var cover = catalog.Browse(new("album", a.Id), 0, 1).Items.FirstOrDefault(); Buckets.Add(new(a.Id, a.Name, a.Count, cover?.ThumbPath ?? "")); }
+            foreach (var a in Albums) Buckets.Add(new(a.Id, a.Name, a.Count, catalog.AlbumCover(a)));
             total = Albums.Count;
         }
         else if (mode != "days")
