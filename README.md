@@ -77,7 +77,7 @@ pwsh -File .\打包.ps1
 # 无交互核心检查，适合 CI
 pwsh -File .\自测.ps1 -CoreOnly
 
-# 完整 17 组检查，需要可交互 Windows 桌面
+# 完整检查，需要可交互 Windows 桌面
 pwsh -File .\自测.ps1
 ```
 
