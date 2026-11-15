@@ -51,6 +51,36 @@ public static class SettingsSmoke
             {
                 settings.SelectPage(key); await Settle(); Check(settings.CurrentPage == key, key + " settings navigation works"); UiSmoke.Save(settings, file);
             }
+            var pending = new TaskCompletionSource<System.Net.Http.HttpResponseMessage>();
+            using var http = new System.Net.Http.HttpClient(new UpdateTests.Stub((request, token) => pending.Task.WaitAsync(token)));
+            var updateHome = Directory.CreateDirectory(Path.Combine(AppPaths.Data, "update-sandbox")).FullName;
+            main.ConfigureUpdates(updateHome, Path.TrimEndingDirectorySeparator(AppContext.BaseDirectory), true, http);
+            settings.SelectPage("about"); await Settle();
+            var autoDownload = UiSmoke.Descendants<CheckBox>(settings).Single(x => x.Content is string text && text == "自动下载更新");
+            Check(autoDownload.IsEnabled && autoDownload.IsChecked == false, "background downloads require opting in");
+            await main.SetAutoDownloadAsync(true);
+            Check(autoDownload.IsChecked == true && new PortableUpdates(http, updateHome, new Version(0, 0, 0)).ReadAutoDownload(), "automatic download choice persists per installation");
+            await main.SetAutoDownloadAsync(false);
+            Button Action(string name) => UiSmoke.Descendants<Button>(settings).Single(button => System.Windows.Automation.AutomationProperties.GetName(button) == name);
+            var update = Action("检查更新");
+            Check(update.IsEnabled && update.Focusable, "about exposes a keyboard-focusable Check for updates action");
+            Check(update.Focus() && update.IsKeyboardFocused, "update button takes keyboard focus and shows the shared focus outline");
+            await Settle();
+            UiSmoke.Save(settings, "09-软件更新-浅色.png");
+            update.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); await Settle();
+            Check(!update.IsEnabled && main.UpdateStatus.Contains("正在检查"), "active update check disables duplicate actions and shows its status");
+            UiSmoke.Save(settings, "10-软件更新-检查中.png");
+            pending.SetException(new System.Net.Http.HttpRequestException("offline")); await Settle();
+            Check(update.IsEnabled && main.UpdateStatus.Contains("无法检查更新"), "an offline check displays a retryable error");
+            settings.ChooseTheme("dark"); settings.Width = settings.MinWidth; settings.Height = settings.MinHeight; await Settle();
+            UiSmoke.Save(settings, "11-软件更新-深色最小窗口-离线.png");
+            pending = new();
+            update.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            pending.SetResult(UpdateTests.Metadata(new Version(99, 0, 0), 1024, new string('a', 64))); await Settle();
+            Check(Action("下载更新").IsEnabled && main.UpdateStatus.Contains("99.0.0"), "discovery exposes a download action and the new version");
+            ThemeManager.SystemLight = () => true; settings.ChooseTheme("system"); await Settle();
+            UiSmoke.Save(settings, "12-软件更新-跟随系统-发现新版.png");
+            settings.ChooseTheme("light"); await Settle();
             settings.SelectPage("library"); await Settle();
             Check(UiSmoke.Descendants<Button>(settings).Any(button => System.Windows.Automation.AutomationProperties.GetName(button) == "检查重复"), "media-library settings exposes duplicate cleanup");
             Check(UiSmoke.Descendants<Button>(settings).Any(button => System.Windows.Automation.AutomationProperties.GetName(button).StartsWith("暂无内容")), "media-library settings exposes the recoverable-deletion entry state");

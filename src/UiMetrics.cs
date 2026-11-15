@@ -15,6 +15,7 @@ public static class UiMetrics
 public sealed class SettingRow : Border
 {
     public Button ActionButton { get; }
+    public TextBlock Description { get; }
     public SettingRow(string title, string description, string action, Action run, string icon = "arrow_right")
     {
         Padding = new(0, 12, 0, 12); BorderThickness = new(0, 0, 0, 1);
@@ -23,6 +24,7 @@ public sealed class SettingRow : Border
         var copy = new StackPanel { Margin = new(0, 0, 20, 0), VerticalAlignment = VerticalAlignment.Center };
         copy.Children.Add(new TextBlock { Text = title, FontSize = UiMetrics.Body, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap });
         var sub = new TextBlock { Text = description, FontSize = UiMetrics.Caption, LineHeight = 20, TextWrapping = TextWrapping.Wrap, Margin = new(0, 4, 0, 0) };
+        Description = sub;
         ThemeManager.Resource(sub, TextBlock.ForegroundProperty, "Muted"); copy.Children.Add(sub); row.Children.Add(copy);
         ActionButton = Dialogs.Button(action, run); ActionButton.Content = Dialogs.LabeledIcon(icon, action); ActionButton.Margin = new(0); ActionButton.VerticalAlignment = VerticalAlignment.Center;
         Grid.SetColumn(ActionButton, 1); row.Children.Add(ActionButton);

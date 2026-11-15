@@ -29,6 +29,9 @@ try {
     Copy-Item -LiteralPath (Join-Path $taskRoot '使用说明.md') -Destination $taskPackageRoot
     Copy-Item -LiteralPath (Join-Path $taskRoot ('docs\RELEASE-' + $taskVersion + '.md')) -Destination (Join-Path $taskPackageRoot '版本说明.md')
     Copy-Item -LiteralPath (Join-Path $taskRoot 'docs\THIRD_PARTY_NOTICES.md') -Destination $taskPackageRoot
+    Copy-Item -LiteralPath (Join-Path $taskRoot 'LICENSE') -Destination $taskPackageRoot
+    # Distribute the icon and demo media notices at the package root as well.
+    Copy-Item -LiteralPath (Join-Path $taskRoot 'src\Assets\Fluent\LICENSE.txt') -Destination (Join-Path $taskPackageRoot 'FLUENT-LICENSE.txt')
     $taskQuickStart = @"
 时光相册 $taskVersion
 
@@ -43,8 +46,9 @@ try {
 Delete 打开删除确认，Esc 取消或退出多选。
 方向键移动，Page Up / Page Down 翻页。
 
-升级前通过应用菜单或托盘“退出程序”关闭旧版。
-把新版运行程序文件夹放在原有 数据 文件夹的同级目录，启动后继续使用原媒体库。
+从 0.2.13 起，也能在“设置 → 关于 → 软件更新”检查、下载和重启更新。
+从更旧版本首次升级时，通过应用菜单或托盘退出旧版。
+把新版运行程序文件夹放在原有 数据 文件夹的同级目录，再启动新版。
 也可从“设置 → 备份与迁移 → 打开媒体库”选择 library.sqlite。
 
 使用说明.md 提供详细操作与备份方式。

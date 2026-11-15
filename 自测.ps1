@@ -1,5 +1,5 @@
 #requires -Version 7.0
-param([switch]$CoreOnly)
+param([switch]$CoreOnly, [string]$UpdateArchive)
 
 $ErrorActionPreference = 'Stop'
 $taskRoot = $PSScriptRoot
@@ -9,6 +9,8 @@ if (-not (Test-Path -LiteralPath $taskExe)) { throw '请先运行 构建.ps1 生
 $taskRun = Join-Path $taskRoot ('验证\自测-' + (Get-Date -Format 'yyyyMMdd-HHmmssfff'))
 New-Item -ItemType Directory -Path $taskRun | Out-Null
 & (Join-Path $taskRoot '工具\设计规范检查.ps1')
+$taskUpdateArgs = @('--update-test')
+if ($UpdateArchive) { $taskUpdateArgs += @('--update-archive', (Resolve-Path -LiteralPath $UpdateArchive).Path) }
 $taskCases = @(
     @{ Name='浏览与多选键盘'; Args=@('--demo','--gallery-smoke'); Result='gallery-results.json' },
     @{ Name='幻灯片与背景音乐'; Args=@('--slideshow-smoke'); Result='slideshow-results.json' },
@@ -18,6 +20,7 @@ $taskCases = @(
     @{ Name='后台退出后重开'; DataCase='后台任务与托盘'; Args=@('--tray-verify'); Result='tray-restart-results.json' },
     @{ Name='紧凑控件与撤销'; Args=@('--demo','--component-smoke'); Result='component-results.json' },
     @{ Name='媒体库迁移'; Args=@('--package-test'); Result='package-results.json' },
+    @{ Name='软件更新'; Args=$taskUpdateArgs; Result='update-results.json' },
     @{ Name='完整流程'; Args=@('--flow-smoke'); Result='flow-test-results.json' },
     @{ Name='核心去重与恢复'; Args=@('--self-test','--test-root',(Join-Path $taskRun '核心去重与恢复\fixture')); Result='self-test-results.json' },
     @{ Name='媒体索引'; Args=@('--viewer-test'); Result='viewer-test-results.json' },
@@ -28,7 +31,7 @@ $taskCases = @(
     @{ Name='十万索引'; Args=@('--scale-test'); Result='scale-results.json' },
     @{ Name='视频控制'; Args=@('--video-smoke',(Join-Path $taskRoot ('成品\运行程序-' + $taskVersion + '\Assets\Demo\flower.mp4'))); Result='video-playback-results.json' }
 )
-if ($CoreOnly) { $taskCases = @($taskCases | Where-Object { $_.Name -in @('文件安全边界','媒体库迁移','核心去重与恢复','媒体索引','旧库升级') }) }
+if ($CoreOnly) { $taskCases = @($taskCases | Where-Object { $_.Name -in @('文件安全边界','媒体库迁移','软件更新','核心去重与恢复','媒体索引','旧库升级') }) }
 $taskResults = @()
 foreach ($taskCase in $taskCases) {
     $taskData = Join-Path $taskRun ($(if ($taskCase.ContainsKey('DataCase')) { $taskCase.DataCase } else { $taskCase.Name }) + '\data')

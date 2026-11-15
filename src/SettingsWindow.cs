@@ -18,6 +18,8 @@ public sealed class SettingsWindow : Window
     readonly Dictionary<string, Button> themes = [];
     readonly Dictionary<string, TextBlock> indicators = [];
     TextBlock? effective;
+    SettingRow? updateRow;
+    CheckBox? autoDownload;
     string currentPage = "appearance";
     public string CurrentPage => currentPage;
 
@@ -45,7 +47,9 @@ public sealed class SettingsWindow : Window
         var scroll = new ScrollViewer { Content = page, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Padding = new(28, 6, 28, 22) }; Grid.SetRow(scroll, 1); right.Children.Add(scroll);
         var footer = new Border { Padding = new(28, 12, 22, 12), BorderThickness = new(0, 1, 0, 0) }; Resource(footer, Border.BorderBrushProperty, "Line"); Grid.SetRow(footer, 2); right.Children.Add(footer);
         var footerDock = new DockPanel(); footer.Child = footerDock; var close = Dialogs.Button("返回媒体库", Close); close.Content = IconText("arrow_left", "返回媒体库"); DockPanel.SetDock(close, Dock.Right); footerDock.Children.Add(close); saved.VerticalAlignment = VerticalAlignment.Center; footerDock.Children.Add(saved);
-        ThemeManager.Changed += ThemeChanged; Closed += (_, _) => ThemeManager.Changed -= ThemeChanged; SelectPage("appearance");
+        ThemeManager.Changed += ThemeChanged; main.UpdateChanged += RefreshUpdateRow;
+        Closed += (_, _) => { ThemeManager.Changed -= ThemeChanged; main.UpdateChanged -= RefreshUpdateRow; };
+        SelectPage("appearance");
     }
     static void Resource(FrameworkElement target, DependencyProperty property, string key) => ThemeManager.Resource(target, property, key);
     static TextBlock Label(string text, double size = 16, bool muted = false, bool bold = false, Thickness? margin = null)
@@ -69,7 +73,7 @@ public sealed class SettingsWindow : Window
     }
     public void SelectPage(string key)
     {
-        currentPage = key; page.Children.Clear(); themes.Clear(); indicators.Clear(); effective = null;
+        currentPage = key; page.Children.Clear(); themes.Clear(); indicators.Clear(); effective = null; updateRow = null; autoDownload = null;
         foreach (var (id, button) in navigation) { bool active = id == key; if (active) Resource(button, Control.BackgroundProperty, "Selected"); else button.Background = Brushes.Transparent; Resource(button, Control.ForegroundProperty, active ? "SelectedText" : "Text"); }
         var titles = key switch
         {
@@ -235,9 +239,29 @@ public sealed class SettingsWindow : Window
     void BuildAbout()
     {
         var intro = new StackPanel(); intro.Children.Add(Label("时光相册", 26, false, true)); intro.Children.Add(Label($"版本 {AppInfo.Version} · Windows 桌面版", 14, true, margin: new(0, 10, 0, 22))); var explanation = Label("按时间、相册和媒体类型浏览回忆。分类只保存引用，让照片与视频继续留在你熟悉的文件夹中。", 15, true); explanation.LineHeight = 26; intro.Children.Add(explanation); page.Children.Add(Card(intro));
+        updateRow = new SettingRow("软件更新", "", "检查更新", async () => await main.UseUpdateActionAsync(this), "arrow_clockwise");
+        System.Windows.Automation.AutomationProperties.SetLiveSetting(updateRow.Description, System.Windows.Automation.AutomationLiveSetting.Polite);
+        page.Children.Add(updateRow);
+        autoDownload = new CheckBox { Content = "自动下载更新", Style = (Style)FindResource("ChoiceCheck"), Margin = new(0, 8, 0, 0) };
+        autoDownload.Click += async (_, _) => await main.SetAutoDownloadAsync(autoDownload.IsChecked == true);
+        page.Children.Add(autoDownload);
+        RefreshUpdateRow();
         Section("浏览快捷键");
         foreach (var (title, text) in new[] { ("双击 / 空格", "打开图片或视频"), ("Ctrl + A", "选择当前已加载的项目"), ("Esc", "取消选择 / 关闭预览"), ("← / → · 滚轮", "预览时切换照片 · 缩放图片"), ("F11", "预览时进入或退出全屏") }) { var row = new DockPanel { Margin = new(0, 0, 0, 18) }; var key = Label(title, 14, false, true); key.Width = 180; row.Children.Add(key); row.Children.Add(Label(text, 14, true)); page.Children.Add(row); }
         page.Children.Add(Label("HEIC、视频预览与播放依赖本机解码组件；无法预览不代表原始文件已损坏。", 13, true, margin: new(0, 12, 0, 0)));
+    }
+    void RefreshUpdateRow()
+    {
+        if (updateRow == null) return;
+        updateRow.Description.Text = main.UpdateStatus;
+        var button = updateRow.ActionButton;
+        if (System.Windows.Automation.AutomationProperties.GetName(button) != main.UpdateAction)
+        {
+            button.Content = Dialogs.LabeledIcon("arrow_clockwise", main.UpdateAction);
+            System.Windows.Automation.AutomationProperties.SetName(button, main.UpdateAction);
+        }
+        button.IsEnabled = main.CanUseUpdateAction;
+        if (autoDownload != null) { autoDownload.IsChecked = main.AutoDownloadEnabled; autoDownload.IsEnabled = main.CanSetAutoDownload; }
     }
     void ShowError(Exception e) { saved.Text = "操作未完成：" + e.Message; Resource(saved, TextBlock.ForegroundProperty, "Danger"); }
 }

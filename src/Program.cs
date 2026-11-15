@@ -14,6 +14,25 @@ public static class Program
             var baseDir = AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar);
             var home = Path.GetFileName(baseDir).StartsWith("运行程序", StringComparison.Ordinal) ? Path.GetDirectoryName(baseDir)! : baseDir;
             bool demo = args.Contains("--demo");
+            var restartArgs = (string[])args.Clone();
+            bool normalLaunch = true;
+            for (int i = 0; i < args.Length; i++)
+            {
+                if (args[i] == "--settings") continue;
+                if (args[i] is "--data" or "--exclude" && i + 1 < args.Length)
+                {
+                    i++;
+                    restartArgs[i] = Path.GetFullPath(args[i]);
+                }
+                else normalLaunch = false;
+            }
+            bool portable = string.Equals(Path.GetFileName(baseDir), PortableUpdates.FolderName(Version.Parse(AppInfo.Version)), StringComparison.OrdinalIgnoreCase);
+            if (normalLaunch && portable && PortableUpdates.ActiveExecutable(home, Version.Parse(AppInfo.Version)) is string newer)
+            {
+                try { PortableUpdates.Launch(newer, restartArgs); return 0; }
+                catch (System.ComponentModel.Win32Exception) { /* Keep the working version available. */ }
+                catch (IOException) { }
+            }
             var data = Option("--data") ?? Path.Combine(home, demo ? "演示媒体库-v0.2" : "数据");
             AppPaths.Init(data, Option("--exclude") ?? (demo ? baseDir : home));
             bool activationProbe = args.Contains("--activation-probe");
@@ -25,6 +44,7 @@ public static class Program
             if (args.Contains("--viewer-test")) return ViewerTests.Run().GetAwaiter().GetResult();
             if (args.Contains("--migration-test")) return MigrationTest.Run();
             if (args.Contains("--package-test")) return PackageTests.Run();
+            if (args.Contains("--update-test")) return UpdateTests.Run(Option("--update-archive")).GetAwaiter().GetResult();
             if (args.Contains("--tray-verify")) return TrayTests.Verify();
             if (Option("--probe") is string probe)
             {
@@ -78,12 +98,18 @@ public static class Program
             app.DispatcherUnhandledException += (_, e) => { LibraryService.Log("界面", "", e.Exception); MessageBox.Show(e.Exception.Message, "拾光照片"); e.Handled = true; };
             AppDomain.CurrentDomain.UnhandledException += (_, e) => { try { File.AppendAllText(Path.Combine(AppPaths.Data, "fatal.log"), DateTime.Now.ToString("O") + " " + e.ExceptionObject + Environment.NewLine); } catch { } };
             var window = new MainWindow(catalog);
+            window.ConfigureUpdates(home, baseDir, normalLaunch);
             window.SafeClose = code =>
             {
                 Lifecycle("Final window closing; background work stopped");
-                window.StopTray(); instance.Dispose();
+                window.StopUpdates(); window.StopTray(); instance.Dispose();
                 ThemeManager.Stop(); catalog.Dispose(); Lifecycle("Database closed");
                 session.Dispose(); Lifecycle("Session closed; controlled process exit");
+                if (window.RestartForUpdate is string updated)
+                {
+                    try { PortableUpdates.Launch(updated, restartArgs); }
+                    catch (Exception e) { MessageBox.Show("新版未能启动。请从原快捷方式重试。\n\n" + e.Message, "拾光照片"); }
+                }
                 SafeShutdown.Finish(code);
             };
             window.Title = $"时光相册 {AppInfo.Version} · " + (demo ? "演示媒体库" : "本地媒体库");

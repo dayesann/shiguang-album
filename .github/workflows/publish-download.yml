@@ -1,0 +1,52 @@
+name: Publish Windows download
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: publish-windows-download
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.repository == 'dayesann/shiguang-album' && github.ref == 'refs/heads/main'
+    runs-on: windows-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - name: Build and validate Windows package
+        run: |
+          ./构建.ps1
+          ./打包.ps1
+          $version = ([xml](Get-Content -LiteralPath './src/Shiguang.csproj' -Raw)).Project.PropertyGroup.Version
+          ./自测.ps1 -CoreOnly -UpdateArchive "./成品/发布-$version/ShiguangAlbum-$version-win-x64.zip"
+      - name: Publish to this repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          $visibility = gh api "repos/$env:GH_REPO" --jq '.visibility'
+          if ($visibility -ne 'public') { throw 'The source and release repository must be public.' }
+          $version = ([xml](Get-Content -LiteralPath './src/Shiguang.csproj' -Raw)).Project.PropertyGroup.Version
+          if ($version -notmatch '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$') { throw 'Invalid stable version.' }
+          # Do not make an old release the latest, or replace an already published tag.
+          $latest = gh release list --exclude-drafts --exclude-pre-releases --limit 1 --json tagName --jq '.[0].tagName // ""'
+          if ($latest -and ($latest -notmatch '^v(\d+\.\d+\.\d+)$' -or [version]$version -le [version]$Matches[1])) {
+            throw 'The download version must be newer than the latest release.'
+          }
+          $out = Join-Path (Get-Location) "成品/发布-$version"
+          $zip = Join-Path $out "ShiguangAlbum-$version-win-x64.zip"
+          $checksum = Join-Path $out 'SHA256SUMS.txt'
+          gh release create "v$version" $zip $checksum --title "拾光照片 $version · Windows 便携版" --notes-file "./docs/RELEASE-$version.md" --latest
