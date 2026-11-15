@@ -49,4 +49,4 @@ jobs:
           $out = Join-Path (Get-Location) "成品/发布-$version"
           $zip = Join-Path $out "ShiguangAlbum-$version-win-x64.zip"
           $checksum = Join-Path $out 'SHA256SUMS.txt'
-          gh release create "v$version" $zip $checksum --title "拾光照片 $version · Windows 便携版" --notes-file "./docs/RELEASE-$version.md" --latest
+          gh release create "v$version" $zip $checksum --target $env:GITHUB_SHA --title "拾光照片 $version · Windows 便携版" --notes-file "./docs/RELEASE-$version.md" --latest

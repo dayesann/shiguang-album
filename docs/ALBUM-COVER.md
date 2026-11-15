@@ -1,6 +1,6 @@
 # 自定义相册封面
 
-2026-11-15 · 0.2.14 开发分支，尚未发布。对应 [Issue #2](https://github.com/dayesann/shiguang-album/issues/2) 的封面需求。
+2026-11-15 · 0.2.15。对应 [Issue #2](https://github.com/dayesann/shiguang-album/issues/2) 的封面需求。
 
 1. 打开相册，点选一张照片，或用方向键定位。
 2. 在网格上方选择「相册封面 → 将当前照片设为封面」。

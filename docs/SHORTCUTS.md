@@ -1,6 +1,6 @@
 # 设置中的快捷键说明
 
-2026-11-15 · 0.2.14 开发分支，尚未发布。对应 [Issue #6](https://github.com/dayesann/shiguang-album/issues/6)。
+2026-11-15 · 0.2.15。对应 [Issue #6](https://github.com/dayesann/shiguang-album/issues/6)。
 
 打开「设置 → 快捷键」，按媒体网格、多选模式、图片预览和回收站查找操作。每行左侧是操作说明，右侧是对应按键；键帽是只读提示。媒体网格的 Ctrl+A 只勾选已加载项目，回收站的 Ctrl+A 勾选列表中的所有项目。
 

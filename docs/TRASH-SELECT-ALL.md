@@ -1,6 +1,6 @@
 # 回收站全选
 
-2026-11-15 · 0.2.14 开发分支，尚未发布。对应 [Issue #5](https://github.com/dayesann/shiguang-album/issues/5)。
+2026-11-15 · 0.2.15。对应 [Issue #5](https://github.com/dayesann/shiguang-album/issues/5)。
 
 回收站顶部的「全选」和 Ctrl+A 会勾选当前回收站中的所有项目，包括屏幕下方的条目；「取消全选」清除勾选。底部继续显示已选数量和总大小。全选不会恢复或删除任何项目。点击「永久删除」仍打开原来的范围确认，默认焦点为「取消」。取消后保留勾选，文件保持原状。
 

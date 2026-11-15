@@ -1,6 +1,6 @@
 # 媒体网格鼠标框选
 
-2026-11-15 · 0.2.14 开发分支，尚未发布。对应 [Issue #2](https://github.com/dayesann/shiguang-album/issues/2) 的鼠标框选需求。
+2026-11-15 · 0.2.15。对应 [Issue #2](https://github.com/dayesann/shiguang-album/issues/2) 的鼠标框选需求。
 
 1. 在媒体网格点击「多选」。
 2. 从照片上或网格空白处按住左键拖动。框内项目会显示勾选，底部显示已选数量。
