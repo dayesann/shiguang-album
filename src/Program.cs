@@ -121,6 +121,7 @@ public static class Program
             app.Exit += (_, _) => { window.StopTray(); instance.Dispose(); };
             if (args.Contains("--ui-smoke")) window.Loaded += async (_, _) => await UiSmoke.Run(window, catalog);
             if (args.Contains("--gallery-smoke")) window.Loaded += async (_, _) => await GalleryTests.Run(window, catalog);
+            if (args.Contains("--trash-selection-smoke")) window.Loaded += async (_, _) => await TrashSelectionSmoke.Run(window, catalog);
             if (args.Contains("--slideshow-smoke")) window.Loaded += async (_, _) => await SlideshowTests.Run(window, catalog);
             if (args.Contains("--recovery-smoke")) window.Loaded += async (_, _) => await RecoverySmoke.Run(window, catalog);
             if (args.Contains("--components")) window.Loaded += (_, _) => window.Dispatcher.BeginInvoke(() => new ComponentGalleryWindow { Owner = window }.ShowDialog());

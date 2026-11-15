@@ -1,7 +1,9 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Data;
+using System.Windows.Input;
 using System.Windows.Media;
 
 namespace Shiguang;
@@ -387,9 +389,13 @@ public sealed class DuplicateWindow : Window
 public sealed class TrashWindow : Window
 {
     readonly List<Photo> items;
+    readonly List<CheckBox> itemChecks = [];
     readonly TextBlock info = new();
+    readonly Button selectAllButton;
     readonly Button restoreButton;
     readonly Button purgeButton;
+    bool updatingSelection;
+    bool allSelected;
     public IReadOnlyList<Photo> SelectedPhotos => items.Where(p => p.Selected).ToList();
     public TrashRequestedAction RequestedAction { get; private set; }
 
@@ -418,7 +424,19 @@ public sealed class TrashWindow : Window
         heading.Children.Add(new TextBlock { Text = "回收站", FontSize = UiMetrics.Title, FontWeight = FontWeights.SemiBold });
         heading.Children.Add(new TextBlock { Text = "项目保存在来源目录的受控回收文件夹中。恢复不会覆盖同位置已有文件。", FontSize = UiMetrics.Body, Margin = new(0, 6, 0, 0), TextWrapping = TextWrapping.Wrap });
         ThemeManager.Resource((TextBlock)heading.Children[1], TextBlock.ForegroundProperty, "Muted");
-        root.Children.Add(heading);
+        var header = new DockPanel { LastChildFill = true };
+        selectAllButton = Dialogs.Button("全选", () => SetAllSelected(!allSelected));
+        selectAllButton.MinWidth = 80;
+        selectAllButton.Margin = new(16, 0, 0, 0);
+        selectAllButton.VerticalAlignment = VerticalAlignment.Top;
+        AutomationProperties.SetAcceleratorKey(selectAllButton, "Ctrl+A");
+        DockPanel.SetDock(selectAllButton, Dock.Right);
+        header.Children.Add(selectAllButton);
+        header.Children.Add(heading);
+        root.Children.Add(header);
+        InputBindings.Add(new KeyBinding(ApplicationCommands.SelectAll, Key.A, ModifierKeys.Control));
+        CommandBindings.Add(new CommandBinding(ApplicationCommands.SelectAll,
+            (_, _) => SetAllSelected(true), (_, e) => e.CanExecute = items.Count > 0));
 
         var content = new Grid();
         Grid.SetRow(content, 1);
@@ -495,8 +513,9 @@ public sealed class TrashWindow : Window
             Margin = new(18, 0, 6, 0)
         };
         System.Windows.Automation.AutomationProperties.SetName(check, "选择项目 " + photo.Name);
-        check.Checked += (_, _) => { photo.Selected = true; UpdateInfo(); };
-        check.Unchecked += (_, _) => { photo.Selected = false; UpdateInfo(); };
+        check.Checked += (_, _) => { photo.Selected = true; if (!updatingSelection) UpdateInfo(); };
+        check.Unchecked += (_, _) => { photo.Selected = false; if (!updatingSelection) UpdateInfo(); };
+        itemChecks.Add(check);
         Grid.SetColumn(check, 2);
         row.Children.Add(check);
 
@@ -509,9 +528,25 @@ public sealed class TrashWindow : Window
     void UpdateInfo()
     {
         var chosen = SelectedPhotos;
+        allSelected = items.Count > 0 && chosen.Count == items.Count;
+        string action = allSelected ? "取消全选" : "全选";
+        selectAllButton.Content = action;
+        System.Windows.Automation.AutomationProperties.SetName(selectAllButton, action);
+        selectAllButton.ToolTip = allSelected ? "清除所有勾选" : "勾选回收站内的所有项目（Ctrl+A）";
+        selectAllButton.IsEnabled = items.Count > 0;
         info.Text = chosen.Count == 0 ? "选择项目后可恢复或永久删除。" : $"已选择 {chosen.Count:N0} 项 · {Photo.FormatSize(chosen.Sum(p => p.Size))}";
         restoreButton.IsEnabled = chosen.Count > 0;
         purgeButton.IsEnabled = chosen.Count > 0;
+    }
+
+    void SetAllSelected(bool selected)
+    {
+        if (items.Count == 0 || (selected && allSelected)) return;
+        // Changing N checkboxes should recalculate the totals only once.
+        updatingSelection = true;
+        try { foreach (var check in itemChecks) check.IsChecked = selected; }
+        finally { updatingSelection = false; }
+        UpdateInfo();
     }
 
     void ConfirmPurge()

@@ -19,6 +19,7 @@ $taskCases = @(
     @{ Name='后台任务与托盘'; Args=@('--tray-smoke'); Result='tray-results.json' },
     @{ Name='后台退出后重开'; DataCase='后台任务与托盘'; Args=@('--tray-verify'); Result='tray-restart-results.json' },
     @{ Name='紧凑控件与撤销'; Args=@('--demo','--component-smoke'); Result='component-results.json' },
+    @{ Name='回收站全选'; Args=@('--demo','--trash-selection-smoke'); Result='trash-selection-results.json' },
     @{ Name='媒体库迁移'; Args=@('--package-test'); Result='package-results.json' },
     @{ Name='软件更新'; Args=$taskUpdateArgs; Result='update-results.json' },
     @{ Name='完整流程'; Args=@('--flow-smoke'); Result='flow-test-results.json' },
