@@ -35,6 +35,14 @@ public static class GalleryTests
         }
         void FocusKey(Key key) => Key((UIElement)Keyboard.FocusedElement, key);
         var modeButton = (Button)main.FindName("SelectionModeButton");
+        var galleryView = (ListBox)main.FindName("Gallery");
+        var frame = (Border)main.FindName("MarqueeFrame");
+        ScrollContentPresenter Viewport() => UiElements.Descendants<ScrollContentPresenter>(galleryView).First();
+        Point OnTile(Photo photo, bool lowerRight = false)
+        {
+            var button = Tile(photo);
+            return button.TranslatePoint(lowerRight ? new Point(button.ActualWidth - 8, button.ActualHeight - 8) : new Point(8, 8), Viewport());
+        }
         try
         {
             while (main.IsBusy) await Task.Delay(100);
@@ -113,6 +121,35 @@ public static class GalleryTests
             coverMenu = coverButton.ContextMenu;
             Check(!((MenuItem)coverMenu.Items[0]).IsEnabled, "multi-select cannot replace the cover with a focused item");
             coverMenu.IsOpen = false; Click(modeButton);
+            var rowPhotos = main.Rows[0].Items.Select(item => item.Photo).Take(3).ToArray();
+            Click(modeButton);
+            Click(Tile(rowPhotos[2]));
+            var left = OnTile(rowPhotos[0]);
+            var right = OnTile(rowPhotos[1], lowerRight: true);
+            main.ArmMarquee(Viewport(), right, additive: false);
+            Check(!main.ExceedsDragThreshold(right) && main.ExceedsDragThreshold(left) && rowPhotos[2].Selected,
+                "arming a possible drag preserves the previous selection until the system threshold");
+            main.StartMarquee(); main.UpdateMarquee(left);
+            Check(rowPhotos[0].Selected && rowPhotos[1].Selected && !rowPhotos[2].Selected && frame.IsVisible &&
+                !Action("加入相册").IsEnabled && !Action("移入回收站").IsEnabled,
+                "reverse drag replaces selection, shows its frame, and keeps bulk actions disabled");
+            main.UpdateMarquee(OnTile(rowPhotos[1]));
+            Check(!rowPhotos[0].Selected && rowPhotos[1].Selected && main.SelectionText == "已选择 1 个项目",
+                "shrinking the frame unchecks tiles that are no longer inside it");
+            Key(Tile(rowPhotos[1]), System.Windows.Input.Key.Escape);
+            Check(main.IsSelecting && !frame.IsVisible && rowPhotos[2].Selected && !rowPhotos[1].Selected,
+                "Escape cancels the drag and restores the original checks without leaving multi-select");
+            main.ArmMarquee(Viewport(), left, additive: true);
+            main.StartMarquee(); main.UpdateMarquee(right); main.EndMarquee(restore: false);
+            Check(rowPhotos.All(photo => photo.Selected) && !frame.IsVisible && Action("加入相册").IsEnabled,
+                "Ctrl drag adds to the current checks and release enables bulk actions");
+            main.ArmMarquee(Viewport(), left, additive: false);
+            main.StartMarquee(); main.UpdateMarquee(OnTile(rowPhotos[0], lowerRight: true));
+            main.RefreshPage(true); await Settle();
+            Check(main.IsSelecting && !frame.IsVisible && main.SelectionText == "已选择 3 个项目",
+                "grid refresh cancels a pending selection instead of retaining its preview");
+            Click(modeButton);
+
             foreach (string theme in new[] { "light", "dark", "system" })
             {
                 ThemeManager.SetPreference(theme);
@@ -125,6 +162,13 @@ public static class GalleryTests
                 Check(main.HasSelection && Action("移入回收站").IsVisible && Action("加入相册").IsVisible,
                     theme + " minimum window preserves selection and visible actions");
                 UiSmoke.Save(main, "select-" + theme + "-minimum.png");
+                var firstRow = main.Rows[0].Items.Take(2).Select(item => item.Photo).ToArray();
+                main.ArmMarquee(Viewport(), OnTile(firstRow[0]), additive: false);
+                main.StartMarquee(); main.UpdateMarquee(OnTile(firstRow[1], lowerRight: true)); await Settle();
+                Check(frame.IsVisible && firstRow.All(item => item.Selected) && main.SelectionText == "已选择 2 个项目",
+                    theme + " minimum window shows the selection rectangle and updates its count");
+                UiSmoke.Save(main, "marquee-" + theme + "-minimum.png");
+                main.EndMarquee(restore: false);
                 Click(modeButton);
             }
 
