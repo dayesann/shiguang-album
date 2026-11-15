@@ -47,6 +47,30 @@ public static class SettingsSmoke
             ThemeManager.HighContrastMode = () => true; ThemeManager.Reapply(); await Settle();
             Check(ThemeManager.IsHighContrast && ColorOf(main.Background) == System.Windows.SystemColors.WindowColor.ToString(), "Windows high-contrast mode overrides decorative palettes with system colors");
             ThemeManager.HighContrastMode = () => false; ThemeManager.Reapply(); await Settle();
+            var shortcuts = UiSmoke.Descendants<Button>(settings).Single(b => b.Tag is "shortcuts");
+            Check(shortcuts.Focus() && shortcuts.IsKeyboardFocused, "shortcut navigation can take keyboard focus");
+            shortcuts.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); await Settle();
+            Check(settings.CurrentPage == "shortcuts", "shortcut reference has a dedicated settings page");
+            Check(UiSmoke.Descendants<TextBlock>(settings).Count(t => t.Text == "Ctrl + A") == 2 &&
+                UiSmoke.Descendants<TextBlock>(settings).Any(t => t.Text == "全选已加载的项目") &&
+                UiSmoke.Descendants<TextBlock>(settings).Any(t => t.Text == "勾选回收站中的所有项目"),
+                "the two Ctrl+A scopes are documented separately");
+            UiSmoke.Save(settings, "shortcuts-light.png");
+            settings.Width = settings.MinWidth; settings.Height = settings.MinHeight;
+            foreach (string theme in new[] { "dark", "system" })
+            {
+                settings.ChooseTheme(theme); await Settle();
+                var scroll = UiSmoke.Descendants<ScrollViewer>(settings).Single(s => s.Content is StackPanel);
+                Check(scroll.ScrollableHeight > 0 && scroll.ViewportWidth > 0, theme + " shortcut contents fit the minimum window with vertical scrolling");
+                UiSmoke.Save(settings, "shortcuts-" + theme + "-minimum.png");
+                scroll.ScrollToEnd(); await Settle();
+                Check(scroll.VerticalOffset > 0, theme + " shortcut content can be scrolled to the last group");
+                if (theme == "dark") UiSmoke.Save(settings, "shortcuts-dark-last-group.png");
+                settings.SelectPage("about"); settings.SelectPage("shortcuts"); await Settle();
+                Check(scroll.VerticalOffset == 0, theme + " returning to shortcuts opens the first group");
+            }
+            settings.Width = 1060; settings.Height = 790;
+            settings.ChooseTheme("light"); await Settle();
             foreach (var (key, file) in new[] { ("sources", "05-设置-来源目录.png"), ("library", "06-设置-媒体库与备份.png"), ("about", "07-设置-关于.png") })
             {
                 settings.SelectPage(key); await Settle(); Check(settings.CurrentPage == key, key + " settings navigation works"); UiSmoke.Save(settings, file);

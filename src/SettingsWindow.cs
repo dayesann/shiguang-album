@@ -11,6 +11,7 @@ public sealed class SettingsWindow : Window
     readonly MainWindow main;
     readonly Catalog catalog;
     readonly StackPanel page = new();
+    readonly ScrollViewer pageScroll;
     readonly TextBlock heading = Label("外观", UiMetrics.Title, false, true);
     readonly TextBlock description = Label("让时光相册以你喜欢的方式呈现。", 14, true);
     readonly TextBlock saved = Label("更改会自动保存", 13, true);
@@ -35,7 +36,7 @@ public sealed class SettingsWindow : Window
         var sideDock = new DockPanel(); side.Child = sideDock;
         var identity = new StackPanel { Margin = new(10, 0, 0, 24) }; identity.Children.Add(Label("设置", 24, false, true)); identity.Children.Add(Label("时光相册", 13, true, margin: new(0, 7, 0, 0))); DockPanel.SetDock(identity, Dock.Top); sideDock.Children.Add(identity);
         var nav = new StackPanel(); NavigationKeys.SetEnabled(nav, true); sideDock.Children.Add(nav);
-        foreach (var (key, icon, text) in new[] { ("general", "settings", "常规"), ("appearance", "grid", "外观"), ("sources", "folder", "来源目录"), ("library", "apps_list", "媒体库"), ("backup", "copy", "备份与迁移"), ("about", "info", "关于") })
+        foreach (var (key, icon, text) in new[] { ("general", "settings", "常规"), ("appearance", "grid", "外观"), ("sources", "folder", "来源目录"), ("library", "apps_list", "媒体库"), ("backup", "copy", "备份与迁移"), ("shortcuts", "apps_list", "快捷键"), ("about", "info", "关于") })
         {
             var button = new Button { Style = (Style)FindResource("NavButton"), Content = IconText(icon, text), Tag = key };
             System.Windows.Automation.AutomationProperties.SetName(button, text);
@@ -44,7 +45,7 @@ public sealed class SettingsWindow : Window
         var right = new Grid(); Grid.SetColumn(right, 1); root.Children.Add(right);
         right.RowDefinitions.Add(new() { Height = new(84) }); right.RowDefinitions.Add(new()); right.RowDefinitions.Add(new() { Height = GridLength.Auto });
         var header = new StackPanel { Margin = new(28, 23, 28, 0) }; header.Children.Add(heading); description.Margin = new(0, 7, 0, 0); header.Children.Add(description); right.Children.Add(header);
-        var scroll = new ScrollViewer { Content = page, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Padding = new(28, 6, 28, 22) }; Grid.SetRow(scroll, 1); right.Children.Add(scroll);
+        pageScroll = new ScrollViewer { Content = page, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Padding = new(28, 6, 28, 22) }; Grid.SetRow(pageScroll, 1); right.Children.Add(pageScroll);
         var footer = new Border { Padding = new(28, 12, 22, 12), BorderThickness = new(0, 1, 0, 0) }; Resource(footer, Border.BorderBrushProperty, "Line"); Grid.SetRow(footer, 2); right.Children.Add(footer);
         var footerDock = new DockPanel(); footer.Child = footerDock; var close = Dialogs.Button("返回媒体库", Close); close.Content = IconText("arrow_left", "返回媒体库"); DockPanel.SetDock(close, Dock.Right); footerDock.Children.Add(close); saved.VerticalAlignment = VerticalAlignment.Center; footerDock.Children.Add(saved);
         ThemeManager.Changed += ThemeChanged; main.UpdateChanged += RefreshUpdateRow;
@@ -81,11 +82,14 @@ public sealed class SettingsWindow : Window
             "sources" => ("来源目录", "连接照片与视频所在的位置，统一浏览散落在各处的回忆。"),
             "library" => ("媒体库", "查看媒体库状态与整理工具。"),
             "backup" => ("备份与迁移", "为相册留一份备份，或把完整媒体库带到新电脑。"),
+            "shortcuts" => ("快捷键", "按使用场景查找键盘与鼠标操作。"),
             "about" => ("关于时光相册", "一个保留原始目录的本地照片与视频查看器。"),
             _ => ("外观", "让时光相册以你喜欢的方式呈现。")
         };
         heading.Text = titles.Item1; description.Text = titles.Item2;
-        if (key == "general") BuildGeneral(); else if (key == "sources") BuildSources(); else if (key == "library") BuildLibrary(); else if (key == "backup") BuildBackup(); else if (key == "about") BuildAbout(); else BuildAppearance();
+        if (key == "general") BuildGeneral(); else if (key == "sources") BuildSources(); else if (key == "library") BuildLibrary(); else if (key == "backup") BuildBackup(); else if (key == "shortcuts") BuildShortcuts(); else if (key == "about") BuildAbout(); else BuildAppearance();
+        pageScroll.ScrollToHome();
+        saved.Visibility = key == "shortcuts" ? Visibility.Collapsed : Visibility.Visible;
         ThemeChanged();
     }
     void BuildAppearance()
@@ -246,9 +250,55 @@ public sealed class SettingsWindow : Window
         autoDownload.Click += async (_, _) => await main.SetAutoDownloadAsync(autoDownload.IsChecked == true);
         page.Children.Add(autoDownload);
         RefreshUpdateRow();
-        Section("浏览快捷键");
-        foreach (var (title, text) in new[] { ("双击 / 空格", "打开图片或视频"), ("Ctrl + A", "选择当前已加载的项目"), ("Esc", "取消选择 / 关闭预览"), ("← / → · 滚轮", "预览时切换照片 · 缩放图片"), ("F11", "预览时进入或退出全屏") }) { var row = new DockPanel { Margin = new(0, 0, 0, 18) }; var key = Label(title, 14, false, true); key.Width = 180; row.Children.Add(key); row.Children.Add(Label(text, 14, true)); page.Children.Add(row); }
         page.Children.Add(Label("HEIC、视频预览与播放依赖本机解码组件；无法预览不代表原始文件已损坏。", 13, true, margin: new(0, 12, 0, 0)));
+    }
+    void BuildShortcuts()
+    {
+        Group("媒体网格",
+            ("搜索文件名或标签", "Ctrl + F"),
+            ("在照片间移动焦点", "↑ / ↓ / ← / →"),
+            ("按屏移动焦点", "Page Up / Page Down"),
+            ("打开当前照片或视频（浏览模式）", "双击 / Enter / 空格"));
+        Group("多选模式",
+            ("勾选或取消当前项目", "Enter / 空格"),
+            ("全选已加载的项目", "Ctrl + A"),
+            ("追加鼠标框选", "Ctrl + 拖动"),
+            ("取消正在进行的框选，或退出多选", "Esc"),
+            ("打开移入回收站的确认", "Delete"));
+        Group("图片预览",
+            ("切换上一张或下一张", "方向键 / Page Up / Page Down"),
+            ("播放或暂停幻灯片", "空格"),
+            ("缩放当前照片", "鼠标滚轮"),
+            ("进入或退出全屏", "F11"),
+            ("退出全屏或关闭预览", "Esc"));
+        Group("回收站", ("勾选回收站中的所有项目", "Ctrl + A"));
+
+        void Group(string title, params (string Action, string Keys)[] shortcuts)
+        {
+            Section(title);
+            foreach (var (action, keys) in shortcuts)
+            {
+                var row = new Grid { MinHeight = UiMetrics.Control };
+                row.ColumnDefinitions.Add(new());
+                row.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
+                var name = Label(action, UiMetrics.Body, margin: new(0, 0, 12, 0));
+                name.VerticalAlignment = VerticalAlignment.Center;
+                row.Children.Add(name);
+                var badge = new Border
+                {
+                    Child = Label(keys, UiMetrics.Caption), Padding = new(8, 4, 8, 4),
+                    BorderThickness = new(1), CornerRadius = UiMetrics.ControlRadius,
+                    VerticalAlignment = VerticalAlignment.Center
+                };
+                Resource(badge, Border.BackgroundProperty, "Surface");
+                Resource(badge, Border.BorderBrushProperty, "Line");
+                Grid.SetColumn(badge, 1);
+                row.Children.Add(badge);
+                var line = new Border { Child = row, Padding = new(0, 4, 0, 4), BorderThickness = new(0, 0, 0, 1) };
+                Resource(line, Border.BorderBrushProperty, "Line");
+                page.Children.Add(line);
+            }
+        }
     }
     void RefreshUpdateRow()
     {
