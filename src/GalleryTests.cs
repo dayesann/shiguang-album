@@ -85,6 +85,34 @@ public static class GalleryTests
             Check(!main.IsSelecting && !first.Selected && !second.Selected && !main.ShowFooter, "Escape exits multi-select and clears checks");
 
             main.OpenAlbum(catalog.Albums().First().Id); await Settle();
+            var coverAlbum = catalog.Albums().First();
+            var previousCover = catalog.AlbumCover(coverAlbum);
+            var custom = main.Rows.SelectMany(row => row.Items).Select(item => item.Photo)
+                .First(photo => !photo.IsVideo && photo.PreviewState == "ready" && photo.ThumbKey != previousCover);
+            var coverButton = (Button)main.FindName("AlbumCoverButton");
+            Tile(custom).Focus();
+            Check(coverButton.Focus() && main.FocusedPhoto?.Id == custom.Id, "keyboard focus can move from a photo to the album cover action");
+            Click(coverButton); await Settle();
+            var coverMenu = coverButton.ContextMenu;
+            var setCover = (MenuItem)coverMenu.Items[0]; var resetCover = (MenuItem)coverMenu.Items[1];
+            Check(setCover.IsEnabled && !resetCover.IsEnabled, "a usable photo can be set and an automatic cover has no reset action");
+            setCover.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent)); coverMenu.IsOpen = false; await Settle();
+            Check(catalog.Albums().Single(a => a.Id == coverAlbum.Id).CoverPhotoId == custom.Id && main.Notification.IsVisible,
+                "choosing the cover saves the focused photo and reports success");
+            UiSmoke.Save(main, "album-cover-set.png");
+            Click(UiElements.Descendants<Button>(main).Single(button => button.Tag is "albums")); await Settle(600);
+            Check(main.Buckets.Single(bucket => bucket.Key == coverAlbum.Id).Cover == custom.ThumbKey, "album overview displays the chosen cover");
+            UiSmoke.Save(main, "album-cover-overview.png");
+            main.OpenAlbum(coverAlbum.Id); await Settle();
+            Click(coverButton); await Settle();
+            coverMenu = coverButton.ContextMenu; resetCover = (MenuItem)coverMenu.Items[1];
+            Check(resetCover.IsEnabled, "an album with a custom cover offers reset");
+            resetCover.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent)); coverMenu.IsOpen = false; await Settle();
+            Check(catalog.AlbumCover(catalog.Albums().Single(a => a.Id == coverAlbum.Id)) == previousCover, "reset restores the original cover in the app");
+            Click(modeButton); Click(coverButton); await Settle();
+            coverMenu = coverButton.ContextMenu;
+            Check(!((MenuItem)coverMenu.Items[0]).IsEnabled, "multi-select cannot replace the cover with a focused item");
+            coverMenu.IsOpen = false; Click(modeButton);
             foreach (string theme in new[] { "light", "dark", "system" })
             {
                 ThemeManager.SetPreference(theme);

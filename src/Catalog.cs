@@ -6,6 +6,7 @@ namespace Shiguang;
 public sealed partial class Catalog : IDisposable
 {
     readonly NativeDb db;
+    readonly bool hasAlbumCovers;
     public Catalog(bool readOnly = false)
     {
         db = new NativeDb(Path.Combine(AppPaths.Data, "library.sqlite"), readOnly);
@@ -15,7 +16,11 @@ public sealed partial class Catalog : IDisposable
                 foreach (var row in db.Query("SELECT id FROM photos")) AppPaths.ValidateId(row[0]);
         }
         catch { db.Dispose(); throw; }
-        if (readOnly) return;
+        if (readOnly)
+        {
+            hasAlbumCovers = db.Query("SELECT 1 FROM sqlite_master WHERE type='table' AND name='album_covers'").Count > 0;
+            return;
+        }
         db.Run("CREATE TABLE IF NOT EXISTS photos(id TEXT PRIMARY KEY,path TEXT NOT NULL COLLATE NOCASE UNIQUE,root TEXT NOT NULL,size INTEGER,modified INTEGER,taken TEXT,date_source TEXT,width INTEGER,height INTEGER,hash TEXT,visual_hash TEXT,sharpness REAL,brightness REAL,error TEXT,status TEXT NOT NULL DEFAULT 'active',original_path TEXT NOT NULL DEFAULT '',trash_date TEXT NOT NULL DEFAULT '',favorite INTEGER DEFAULT 0)");
         db.Run("CREATE INDEX IF NOT EXISTS photos_time ON photos(status,taken DESC,id)");
         db.Run("CREATE INDEX IF NOT EXISTS photos_hash ON photos(hash)");
@@ -23,6 +28,8 @@ public sealed partial class Catalog : IDisposable
         db.Run("CREATE TABLE IF NOT EXISTS roots(path TEXT PRIMARY KEY COLLATE NOCASE)");
         db.Run("CREATE TABLE IF NOT EXISTS albums(id TEXT PRIMARY KEY,name TEXT NOT NULL)");
         db.Run("CREATE TABLE IF NOT EXISTS album_photos(album_id TEXT REFERENCES albums(id) ON DELETE CASCADE,photo_id TEXT REFERENCES photos(id),PRIMARY KEY(album_id,photo_id))");
+        db.Run("CREATE TABLE IF NOT EXISTS album_covers(album_id TEXT PRIMARY KEY REFERENCES albums(id) ON DELETE CASCADE,photo_id TEXT NOT NULL,FOREIGN KEY(album_id,photo_id) REFERENCES album_photos(album_id,photo_id) ON DELETE CASCADE)");
+        hasAlbumCovers = true;
         db.Run("CREATE TABLE IF NOT EXISTS duplicate_members(group_id TEXT,kind TEXT,photo_id TEXT REFERENCES photos(id),keeper TEXT,PRIMARY KEY(group_id,photo_id))");
         db.Run("CREATE TABLE IF NOT EXISTS duplicate_index_state(id INTEGER PRIMARY KEY CHECK(id=1),scanned_at TEXT NOT NULL,item_count INTEGER NOT NULL)");
         db.Run("CREATE TABLE IF NOT EXISTS operations(id TEXT PRIMARY KEY,batch TEXT,kind TEXT,photo_id TEXT REFERENCES photos(id),source TEXT,target TEXT,hash TEXT,state TEXT,error TEXT,created TEXT,source_root TEXT,target_root TEXT,keeper_id TEXT)");
@@ -47,12 +54,14 @@ public sealed partial class Catalog : IDisposable
     public List<Photo> RootPhotos(string root) => db.Query("SELECT * FROM photos WHERE root=? AND status IN ('active','missing')", root).Select(Map).ToList();
     public IReadOnlyList<string> Roots => db.Query("SELECT path FROM roots ORDER BY path").Select(r => r[0]).ToList();
     public void AddRoot(string root) => db.Run("INSERT OR IGNORE INTO roots VALUES(?)", root);
-    internal void ImportAlbums(IReadOnlyList<(string Name, List<Photo> Photos)> albums) => db.Transaction(() =>
+    internal void ImportAlbums(IReadOnlyList<(string Name, List<Photo> Photos, string? CoverPhotoId)> albums) => db.Transaction(() =>
     {
         foreach (var album in albums)
         {
             string id = CreateAlbum(album.Name);
             foreach (var photo in album.Photos) db.Run("INSERT OR IGNORE INTO album_photos VALUES(?,?)", id, photo.Id);
+            if (album.CoverPhotoId is { } cover && album.Photos.Any(p => p.Id == cover && !p.IsVideo))
+                db.Run("INSERT INTO album_covers VALUES(?,?)", id, cover);
         }
     });
     public void MarkMissing(string id) => db.Run("UPDATE photos SET status='missing' WHERE id=?", id);
@@ -74,7 +83,29 @@ public sealed partial class Catalog : IDisposable
         args.Add(limit); args.Add(offset);
         return (db.Query("SELECT p.* FROM photos p WHERE " + where + " ORDER BY p.taken DESC,p.id LIMIT ? OFFSET ?", args.ToArray()).Select(Map).ToList(), count);
     }
-    public List<Album> Albums() => db.Query("SELECT a.id,a.name,(SELECT COUNT(*) FROM album_photos x JOIN photos p ON p.id=x.photo_id WHERE x.album_id=a.id AND p.status='active') FROM albums a ORDER BY a.name").Select(r => new Album(r[0], r[1], int.Parse(r[2]))).ToList();
+    public List<Album> Albums() => db.Query(
+        "SELECT a.id,a.name,(SELECT COUNT(*) FROM album_photos x JOIN photos p ON p.id=x.photo_id WHERE x.album_id=a.id AND p.status='active')," +
+        (hasAlbumCovers ? "c.photo_id FROM albums a LEFT JOIN album_covers c ON c.album_id=a.id" : "'' FROM albums a") +
+        " ORDER BY a.name").Select(r => new Album(r[0], r[1], int.Parse(r[2]), r[3])).ToList();
+    public string AlbumCover(Album album)
+    {
+        if (album.CoverPhotoId.Length > 0 && ById(album.CoverPhotoId) is { Status: "active", IsVideo: false, PreviewState: "ready", Error.Length: 0 } cover &&
+            File.Exists(cover.ThumbPath)) return cover.ThumbKey;
+        return Browse(new("album", album.Id), 0, 1).Items.FirstOrDefault()?.ThumbKey ?? "";
+    }
+    public bool TrySetAlbumCover(string albumId, string photoId)
+    {
+        bool saved = false;
+        db.Transaction(() =>
+        {
+            var eligible = db.Query("SELECT p.id FROM album_photos x JOIN photos p ON p.id=x.photo_id WHERE x.album_id=? AND p.id=? AND p.status='active' AND p.media_kind='image' AND p.error='' AND p.preview_state='ready'", albumId, photoId);
+            if (eligible.Count == 0 || !File.Exists(AppPaths.Thumb(photoId))) return;
+            db.Run("INSERT OR REPLACE INTO album_covers(album_id,photo_id) VALUES(?,?)", albumId, photoId);
+            saved = true;
+        });
+        return saved;
+    }
+    public void ResetAlbumCover(string albumId) => db.Run("DELETE FROM album_covers WHERE album_id=?", albumId);
     public string CreateAlbum(string name) { var id = Guid.NewGuid().ToString("N"); db.Run("INSERT INTO albums VALUES(?,?)", id, name); return id; }
     public void RenameAlbum(string id, string name) => db.Run("UPDATE albums SET name=? WHERE id=?", name, id);
     public void DeleteAlbum(string id) => db.Run("DELETE FROM albums WHERE id=?", id);

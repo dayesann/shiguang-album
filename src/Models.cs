@@ -53,7 +53,7 @@ public sealed partial class Photo : Observable
     public static string FormatSize(long size) => size >= 1073741824 ? $"{size / 1073741824d:0.0} GB" : size >= 1048576 ? $"{size / 1048576d:0.0} MB" : $"{size / 1024d:0} KB";
 }
 
-public sealed record Album(string Id, string Name, int Count)
+public sealed record Album(string Id, string Name, int Count, string CoverPhotoId = "")
 {
     public string Label => $"{Name}   {Count:N0}";
 }

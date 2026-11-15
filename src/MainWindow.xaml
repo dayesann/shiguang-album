@@ -51,6 +51,7 @@
      <DockPanel Margin="4,0,4,4">
       <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
        <TextBlock Text="{Binding Summary}" Foreground="{DynamicResource Muted}" FontSize="{x:Static l:UiMetrics.Caption}" VerticalAlignment="Center"/>
+       <Button x:Name="AlbumCoverButton" Content="相册封面" Click="AlbumCover_Click" Margin="12,0,0,0" Visibility="{Binding InAlbum, Converter={StaticResource BoolVis}}" IsEnabled="{Binding CanMutate}" ToolTip="选择一张照片作为封面，或恢复自动封面"/>
        <Button x:Name="SelectionModeButton" Content="{Binding SelectionModeText}" ToolTip="{Binding SelectionModeHint}" Click="SelectionMode_Click" MinWidth="64" Margin="12,0,0,0" Visibility="{Binding CanShowDetails, Converter={StaticResource BoolVis}}"/>
       </StackPanel>
       <Button Content="{Binding DateBreadcrumb}" Click="ClearDate_Click" ToolTip="返回全部时间" FontSize="13" Padding="2,0" MinHeight="24" HorizontalAlignment="Left"/>
