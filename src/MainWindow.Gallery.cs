@@ -47,6 +47,7 @@ public partial class MainWindow
 
     void SetSelectionMode(bool value)
     {
+        EndMarquee(restore: true);
         IsSelecting = value;
         if (!value) SetAllSelected(false);
         Notify(nameof(IsSelecting));
@@ -153,6 +154,12 @@ public partial class MainWindow
 
     async void Window_KeyDown(object sender, KeyEventArgs e)
     {
+        if (MarqueeActive)
+        {
+            if (e.Key == Key.Escape) EndMarquee(restore: true);
+            e.Handled = true;
+            return;
+        }
         var modifiers = Keyboard.Modifiers;
         if (e.Key == Key.F && modifiers == ModifierKeys.Control)
         {

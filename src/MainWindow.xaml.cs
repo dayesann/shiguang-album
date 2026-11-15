@@ -55,11 +55,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     public GridLength DetailWidth => new(ShowDetails ? 285 : 0);
     public bool IsSelecting { get; private set; }
     public string SelectionModeText => IsSelecting ? "完成" : "多选";
-    public string SelectionModeHint => IsSelecting ? "退出多选（Esc）" : "勾选多个项目";
+    public string SelectionModeHint => IsSelecting ? "拖动框选，按 Ctrl 拖动追加；完成或按 Esc 退出多选" : "进入多选，可以点击勾选或拖动框选";
     public bool HasSelection => IsSelecting && selectedCount > 0;
     public string SelectionText => $"已选择 {selectedCount:N0} 个项目";
-    public bool CanEditSelection => HasSelection && CanMutate;
-    public bool CanTrashSelection => HasSelection && CanScan && CanMutate && view != "missing";
+    public bool CanEditSelection => HasSelection && CanMutate && !MarqueeActive;
+    public bool CanTrashSelection => CanEditSelection && CanScan && view != "missing";
     public bool IsEmpty => total == 0;
     public double BucketWidth => bucketWidth;
     public Photo? FocusedPhoto => focused;
@@ -80,6 +80,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     public MainWindow(Catalog catalog)
     {
         this.catalog = catalog; indexer = new(catalog); InitializeComponent(); DataContext = this;
+        Deactivated += (_, _) => EndMarquee(restore: true);
+        Gallery.PreviewMouseLeftButtonDown += Gallery_MarqueeDown;
+        Gallery.PreviewMouseMove += Gallery_MarqueeMove;
+        Gallery.PreviewMouseLeftButtonUp += Gallery_MarqueeUp;
+        Gallery.LostMouseCapture += Gallery_MarqueeCaptureLost;
         videoLauncher.Returned += () => Dispatcher.BeginInvoke(() => { if (IsLoaded) Activate(); });
         ThemeManager.Attach(this); ThemeManager.Changed += UpdateMode; Closed += (_, _) => ThemeManager.Changed -= UpdateMode;
         debounce.Tick += (_, _) => { debounce.Stop(); RefreshPage(); };
@@ -137,6 +142,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     public void RefreshPage(bool preserveSelection = false)
     {
         if (!ready) return;
+        EndMarquee(restore: true);
         var selected = preserveSelection && IsSelecting ? loaded.Where(x => x.Selected).Select(x => x.Id).ToHashSet() : [];
         bool restoreKeyboardFocus = preserveSelection && Gallery.IsKeyboardFocusWithin;
         string? focusedId = preserveSelection ? focused?.Id : null;
@@ -188,6 +194,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     void Reflow()
     {
         if (!ready) return;
+        EndMarquee(restore: true);
         bool restoreKeyboardFocus = Gallery.IsKeyboardFocusWithin;
         double area = Math.Max(300, Gallery.ActualWidth > 50 ? Gallery.ActualWidth - 32 : ActualWidth - 380 - (ShowDetails ? 285 : 0));
         bucketWidth = Math.Max(200, Math.Floor(area / Math.Max(2, (int)(area / 270))) - 20); Notify(nameof(BucketWidth));
@@ -384,7 +391,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         ActionColumn.Width = new(actions); ActionToolbar.Width = actions;
     }
     void Window_SizeChanged(object sender, SizeChangedEventArgs e) { if (ready) { UpdateHeaderDensity(); resize.Stop(); resize.Start(); } }
-    void Gallery_ScrollChanged(object sender, ScrollChangedEventArgs e) { if (ready && !loading && e.VerticalChange > 0 && e.VerticalOffset + e.ViewportHeight >= e.ExtentHeight - 6 && loaded.Count < total) LoadMore(); }
+    void Gallery_ScrollChanged(object sender, ScrollChangedEventArgs e)
+    {
+        if (e.VerticalChange != 0 || e.HorizontalChange != 0 || e.ViewportHeightChange != 0 || e.ViewportWidthChange != 0)
+            EndMarquee(restore: true);
+        if (ready && !loading && e.VerticalChange > 0 && e.VerticalOffset + e.ViewportHeight >= e.ExtentHeight - 6 && loaded.Count < total) LoadMore();
+    }
     void Album_SelectionChanged(object sender, SelectionChangedEventArgs e) { if (ready && AlbumList.SelectedItem is Album a) OpenAlbum(a.Id); }
     void Details_Click(object sender, RoutedEventArgs e) { details = !details; NotifyAll(); resize.Stop(); resize.Start(); }
     async void Open(Photo p)
